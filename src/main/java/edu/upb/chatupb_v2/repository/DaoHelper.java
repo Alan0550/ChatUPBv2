@@ -36,25 +36,31 @@ public class DaoHelper<T>  {
 
     public List<T> executeQuery(String query, QueryParameters params, ResultReader<T> reader)
             throws ConnectException, SQLException {
+
         Connection conn;
         PreparedStatement st = null;
+
         try {
             conn = ConnectionDB.getInstance().getConection();
         } catch (Exception ex) {
             log.error("No se logro crear conexion a la base de datos", ex);
             throw new ConnectException("No se logro crear conexion a la base de datos");
         }
-        st = conn.prepareStatement(query);
 
         try {
+            st = conn.prepareStatement(query);
+
             if (params != null) {
                 params.setParameters(st);
             }
+
             boolean status = st.execute();
-            if (!status)
+            if (!status) {
                 log.info("Estado de Ejecucion: {}", status);
+            }
+
             if (status) {
-                List<T> results = new ArrayList<T>();
+                List<T> results = new ArrayList<>();
                 try (ResultSet result = st.getResultSet()) {
                     while (result.next()) {
                         T value = reader.getResult(result);
@@ -62,41 +68,43 @@ public class DaoHelper<T>  {
                             results.add(value);
                         }
                     }
-                    st.close();
-                    return results;
                 }
-            } else {
-                st.close();
+                return results;
             }
+
+            return new ArrayList<>();
+
         } catch (SQLException e) {
-            st.close();
             log.error("Excepcion sql al ejecutar la query : {}  causa => {}", query, e.getMessage());
             throw e;
         } catch (Exception e) {
-            st.close();
             log.error("Error desconocido al ejecutar query : {}", query, e);
             throw e;
         } finally {
             if (st != null) st.close();
-            if (!conn.isClosed()) {
-                conn.close();
-            }
+            // conn siempre debería existir si llegamos aquí, pero lo mantenemos seguro
+            try {
+                if (conn != null && !conn.isClosed()) conn.close();
+            } catch (SQLException ignored) {}
         }
-        return new ArrayList<T>();
     }
 
     protected void insert(String query, QueryParameters params, Model model) throws Exception {
         Connection conn = null;
+
         try {
             conn = ConnectionDB.getInstance().getConection();
         } catch (Exception ex) {
             log.info("No se logro crear conexion a la base de datos", ex);
             throw new SQLException(ex);
         }
+
         try (PreparedStatement st = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS)) {
+
             if (params != null) {
                 params.setParameters(st);
             }
+
             if (st.executeUpdate() > 0) {
                 try (ResultSet rs = st.getGeneratedKeys()) {
                     if (rs.next()) {
@@ -104,6 +112,7 @@ public class DaoHelper<T>  {
                     }
                 }
             }
+
         } catch (SQLException e) {
             log.error("Excepcion sql al ejecutar la query : {}  causa => {}", query, e.getMessage());
             throw new SQLException(e);
@@ -111,64 +120,67 @@ public class DaoHelper<T>  {
             log.error("Error desconocido al ejecutar query : {}", query, e);
             throw new Exception(e);
         } finally {
-            if (!conn.isClosed()) {
-                conn.close();
-            }
+            try {
+                if (conn != null && !conn.isClosed()) conn.close();
+            } catch (SQLException ignored) {}
         }
     }
 
     /**
      * Metodo actualizar
-     *
-     * @param query
-     * @param params
-     * @throws Exception
      */
     protected void update(String query, QueryParameters params) throws ConnectException, SQLException {
         Connection conn;
         PreparedStatement st = null;
+
         try {
             conn = ConnectionDB.getInstance().getConection();
         } catch (Exception ex) {
             log.error("No se logro crear conexion a la base de datos", ex);
             throw new ConnectException("No se logro crear conexion a la base de datos");
         }
-        st = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+
         try {
+            st = conn.prepareStatement(query, Statement.RETURN_GENERATED_KEYS);
+
             if (params != null) {
                 params.setParameters(st);
             }
+
             st.executeUpdate();
-            st.close();
+
         } catch (SQLException e) {
-            if (st != null) st.close();
             log.error("Excepcion sql al ejecutar la query : {}  causa => {}", query, e.getMessage());
             throw e;
         } catch (Exception e) {
-            if (st != null) st.close();
             log.error("Error desconocido al ejecutar query : {}", query, e);
             throw e;
         } finally {
             if (st != null) st.close();
-            if (!conn.isClosed()) {
-                conn.close();
-            }
+            try {
+                if (conn != null && !conn.isClosed()) conn.close();
+            } catch (SQLException ignored) {}
         }
     }
 
     int executeQueryCount(String query, QueryParameters params)
             throws ConnectException, SQLException {
+
         Connection conn;
+
         try {
             conn = ConnectionDB.getInstance().getConection();
         } catch (Exception ex) {
             log.error("No se logro crear conexion a la base de datos", ex);
             throw new ConnectException("No se logro crear conexion a la base de datos");
         }
+
         try (PreparedStatement st = conn.prepareStatement(query)) {
+
             if (params != null) {
                 params.setParameters(st);
             }
+
             boolean status = st.execute();
             if (status) {
                 int cantRows = -1;
@@ -176,11 +188,12 @@ public class DaoHelper<T>  {
                     if (result.next()) {
                         cantRows = result.getInt(1);
                     }
-                    return cantRows;
                 }
-            } else {
-                st.close();
+                return cantRows;
             }
+
+            return -1;
+
         } catch (SQLException e) {
             log.error("Excepcion sql al ejecutar la query : {}  causa => {}", query, e.getMessage());
             throw e;
@@ -188,57 +201,51 @@ public class DaoHelper<T>  {
             log.error("Error desconocido al ejecutar query : {}", query, e);
             throw e;
         } finally {
-            if (!conn.isClosed()) {
-                conn.close();
-            }
+            try {
+                if (conn != null && !conn.isClosed()) conn.close();
+            } catch (SQLException ignored) {}
         }
-        return -1;
     }
 
     /**
      * Metodo para llamar a un procedimiento almacenado
-     *
-     * @param query
-     * @param params
-     * @throws Exception
      */
     protected T executeProcedureStore(String query, QueryParameters params, ResultProcedureReader<T> reader) throws Exception {
+
         Connection conn;
         CallableStatement st = null;
+
         try {
             conn = ConnectionDB.getInstance().getConection();
         } catch (Exception ex) {
             log.info("No se logro crear conexion a la base de datos", ex);
             throw new SQLException(ex);
         }
-        st = conn.prepareCall(query);
-        T value = null;
+
         try {
+            st = conn.prepareCall(query);
+
             if (params != null) {
                 params.setParameters(st);
             }
 
+            T value = null;
             if (st.execute()) {
                 value = reader.getResult(st);
             }
-            st.close();
             return value;
-        } catch (
-                SQLException e) {
-            st.close();
+
+        } catch (SQLException e) {
             log.error("Excepcion sql al ejecutar la query : {}  causa => {}", query, e.getMessage());
             throw new SQLException(e);
-        } catch (
-                Exception e) {
-            st.close();
+        } catch (Exception e) {
             log.error("Error desconocido al ejecutar query : {}", query, e);
             throw new Exception(e);
         } finally {
             if (st != null) st.close();
-            if (!conn.isClosed()) {
-                conn.close();
-            }
+            try {
+                if (conn != null && !conn.isClosed()) conn.close();
+            } catch (SQLException ignored) {}
         }
     }
-
 }

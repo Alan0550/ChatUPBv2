@@ -22,6 +22,5 @@ public class ChatUPB_V2 {
         }catch (Exception e){
             e.printStackTrace();
         }
-
     }
 }

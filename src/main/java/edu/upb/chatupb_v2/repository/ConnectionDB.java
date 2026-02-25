@@ -1,45 +1,40 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package edu.upb.chatupb_v2.repository;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 
-/**
- *
- * @author rlaredo
- */
 public class ConnectionDB {
- 
+
     private static final ConnectionDB connection = new ConnectionDB();
-    
-    private ConnectionDB(){
-       
+
+    private static final String DB_URL =
+            "jdbc:mysql://localhost:3306/chatupb?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC";
+
+    private static final String DB_USER = "root";
+
+    private static final String DB_PASSWORD = "12345689";
+
+    private ConnectionDB() {
     }
-    
-    public static ConnectionDB getInstance(){
+
+    public static ConnectionDB getInstance() {
         return connection;
     }
 
-    
-    public Connection getConection(){
-        Connection conn = null;
+    public Connection getConection() {
         try {
-            Class.forName("org.sqlite.JDBC");
-            conn = DriverManager.getConnection("jdbc:sqlite:chat_upb.sqlite");
-            if (conn != null) {
-                System.out.println("Conexión exitosa.");
-            } else {
-                System.out.println("Conexión fallida");
-            }
+            Class.forName("com.mysql.cj.jdbc.Driver");
+
+            Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
+            System.out.println("Conexión MySQL exitosa.");
+            return conn;
+
         } catch (SQLException e) {
-            System.out.println(e.getMessage());
-        }catch(ClassNotFoundException e){
-        
+            System.out.println("Error SQL al conectar a MySQL: " + e.getMessage());
+        } catch (ClassNotFoundException e) {
+            System.out.println("No se encontró el driver de MySQL (mysql-connector-j).");
         }
-        return conn;   
+        return null;
     }
 }

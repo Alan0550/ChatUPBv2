@@ -3,20 +3,33 @@ package edu.upb.chatupb_v2;
 import edu.upb.chatupb_v2.bl.message.AceptacionInvitacion;
 import edu.upb.chatupb_v2.bl.message.Invitacion;
 import edu.upb.chatupb_v2.bl.message.MensajeChat;
+import edu.upb.chatupb_v2.bl.message.Offline;
 import edu.upb.chatupb_v2.bl.message.RechazoConexion;
 import edu.upb.chatupb_v2.bl.server.ChatEventListener;
 import edu.upb.chatupb_v2.bl.server.ClientMediator;
 import edu.upb.chatupb_v2.bl.server.SocketClient;
+import edu.upb.chatupb_v2.repository.BlackListDao;
+import edu.upb.chatupb_v2.repository.Contact;
+import edu.upb.chatupb_v2.repository.ContactDao;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
-import java.awt.*;
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Dimension;
+import java.awt.EventQueue;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.util.List;
 import java.util.UUID;
 
 public class ChatUI extends JFrame implements ChatEventListener {
     private SocketClient client;
-    private final String miId = UUID.randomUUID().toString();
-    private final String miNombre = System.getProperty("user.name", "Usuario");
+    private static final String MI_ID = "af3bc20a-766c-4cd4-813d-b1067a01fa9a";
+    private final String miNombre = System.getProperty("user.name", "Alan");
+    private final ContactDao contactDao = new ContactDao();
+    private final DefaultListModel<Contact> contactModel = new DefaultListModel<>();
+
     private String idContactoActual;
     private String nombreContactoActual = "Sin contacto";
 
@@ -27,9 +40,13 @@ public class ChatUI extends JFrame implements ChatEventListener {
     private JTextArea areaChat;
     private JTextField txtMensaje;
     private JButton btnEnviar;
+    private JButton btnOffline;
+    private JList<Contact> listContactos;
+
 
     public ChatUI() {
         initUI();
+        cargarContactosIniciales();
     }
 
     private void initUI() {
@@ -62,9 +79,23 @@ public class ChatUI extends JFrame implements ChatEventListener {
 
         top.add(titulo, BorderLayout.WEST);
         top.add(topRight, BorderLayout.EAST);
+//
+        JPanel panelContactos = new JPanel(new BorderLayout(6, 6));
+        panelContactos.setBorder(BorderFactory.createTitledBorder("Contactos"));
+        panelContactos.setBackground(Color.WHITE);
 
-        JPanel center = new JPanel(new BorderLayout(0, 8));
-        center.setOpaque(false);
+        listContactos = new JList<>(contactModel);
+        listContactos.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        listContactos.setCellRenderer(new ContactCellRenderer());
+        listContactos.addListSelectionListener(e -> {
+            if (!e.getValueIsAdjusting()) {
+                onContactoSeleccionado();
+            }
+        });
+        panelContactos.add(new JScrollPane(listContactos), BorderLayout.CENTER);
+
+        JPanel panelChat = new JPanel(new BorderLayout(0, 8));
+        panelChat.setOpaque(false);
 
         JPanel connectBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
         connectBar.setOpaque(false);
@@ -86,8 +117,12 @@ public class ChatUI extends JFrame implements ChatEventListener {
         JScrollPane scroll = new JScrollPane(areaChat);
         scroll.setBorder(BorderFactory.createLineBorder(new Color(210, 210, 210)));
 
-        center.add(connectBar, BorderLayout.NORTH);
-        center.add(scroll, BorderLayout.CENTER);
+        panelChat.add(connectBar, BorderLayout.NORTH);
+        panelChat.add(scroll, BorderLayout.CENTER);
+
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, panelContactos, panelChat);
+        splitPane.setDividerLocation(240);
+        splitPane.setResizeWeight(0.20);
 
         JPanel bottom = new JPanel(new BorderLayout(8, 0));
         bottom.setOpaque(false);
@@ -98,11 +133,157 @@ public class ChatUI extends JFrame implements ChatEventListener {
         bottom.add(btnEnviar, BorderLayout.EAST);
 
         root.add(top, BorderLayout.NORTH);
-        root.add(center, BorderLayout.CENTER);
+        root.add(splitPane, BorderLayout.CENTER);
         root.add(bottom, BorderLayout.SOUTH);
 
-        appendSistema("Tu id: " + miId);
-        pack();
+        JPanel botton = new JPanel(new BorderLayout(8, 0));
+        botton.setOpaque(false);
+        btnOffline = new JButton("Offline");
+        btnOffline.addActionListener(e -> ponermeOffline());
+        botton.add(btnOffline, BorderLayout.SOUTH);
+        root.add(botton, BorderLayout.EAST);
+
+        appendSistema("Tu id: " + MI_ID);
+        setSize(980, 620);
+    }
+
+    private void ponermeOffline() {
+        if (client == null) {
+            appendSistema("No hay conexion activa.");
+            return;
+        }
+        try {
+            Offline offline = new Offline(MI_ID);
+            client.send(offline.generarTrama());
+        } catch (Exception e) {
+            appendSistema("No se pudo enviar offline (0018).");
+        } finally {
+            try {
+                client.close();
+            } catch (Exception ignored) {
+            }
+            client = null;
+            marcarContactoOnline(idContactoActual, false);
+            if (idContactoActual != null) {
+                ClientMediator.getInstance().removerCliente(idContactoActual);
+            }
+            idContactoActual = null;
+            nombreContactoActual = "Sin contacto";
+            setContacto(nombreContactoActual);
+            setEstado("Desconectado", new Color(255, 230, 153));
+            appendSistema("Te desconectaste (0018).");
+        }
+    }
+//
+    private void cargarContactosIniciales() {
+        contactModel.clear();
+        try {
+            List<Contact> contactos = contactDao.findAll();
+            for (Contact c : contactos) {
+                c.setStateConnect(false);
+                contactModel.addElement(c);
+            }
+            appendSistema("Contactos cargados: " + contactos.size());
+        } catch (Exception e) {
+            appendSistema("No se pudieron cargar contactos de la BD.");
+        }
+    }
+
+    private void onContactoSeleccionado() {
+        Contact seleccionado = listContactos.getSelectedValue();
+        if (seleccionado == null) {
+            return;
+        }
+        idContactoActual = seleccionado.getCode();
+        nombreContactoActual = seleccionado.getName();
+        setContacto(nombreContactoActual);
+
+        if (seleccionado.getIp() != null && !seleccionado.getIp().isBlank()) {
+            txtIp.setText(seleccionado.getIp());
+        }
+        if (seleccionado.isStateConnect()) {
+            setEstado("Conectado", new Color(187, 247, 208));
+        } else {
+            setEstado("Sin conexion", new Color(255, 230, 153));
+        }
+    }
+
+    private void guardarOActualizarContacto(String idUsuario, String nombre, String ip, boolean online) {
+        if (idUsuario == null || idUsuario.isBlank()) {
+            return;
+        }
+
+        try {
+            Contact contacto = contactDao.findByCode(idUsuario);
+            if (contacto == null) {
+                contacto = new Contact();
+                contacto.setCode(idUsuario);
+                contacto.setName((nombre == null || nombre.isBlank()) ? idUsuario : nombre);
+                contacto.setIp(ip);
+                contactDao.save(contacto);
+            } else {
+                if (nombre != null && !nombre.isBlank()) {
+                    contacto.setName(nombre);
+                }
+                contacto.setIp(ip);
+                contactDao.update(contacto);
+            }
+
+            contacto.setStateConnect(online);
+            upsertContactoEnLista(contacto);
+        } catch (Exception e) {
+            appendSistema("No se pudo guardar el contacto en BD.");
+        }
+    }
+
+    private void upsertContactoEnLista(Contact contacto) {
+        int index = buscarIndiceContacto(contacto.getCode());
+        if (index >= 0) {
+            contactModel.set(index, contacto);
+        } else {
+            contactModel.addElement(contacto);
+        }
+    }
+
+    private int buscarIndiceContacto(String code) {
+        if (code == null) {
+            return -1;
+        }
+        for (int i = 0; i < contactModel.size(); i++) {
+            Contact c = contactModel.getElementAt(i);
+            if (code.equals(c.getCode())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private Contact buscarContactoPorId(String code) {
+        int index = buscarIndiceContacto(code);
+        if (index < 0) {
+            return null;
+        }
+        return contactModel.getElementAt(index);
+    }
+
+    private void marcarContactoOnline(String idUsuario, boolean online) {
+        if (idUsuario == null) {
+            return;
+        }
+        int index = buscarIndiceContacto(idUsuario);
+        if (index < 0) {
+            return;
+        }
+        Contact contacto = contactModel.getElementAt(index);
+        contacto.setStateConnect(online);
+        contactModel.set(index, contacto);
+    }
+
+    private void seleccionarContactoEnLista(String idUsuario) {
+        int index = buscarIndiceContacto(idUsuario);
+        if (index >= 0) {
+            listContactos.setSelectedIndex(index);
+        }
     }
 
     private void conectar() {
@@ -114,10 +295,9 @@ public class ChatUI extends JFrame implements ChatEventListener {
             }
 
             client = new SocketClient(ip);
-            client.setChatEventListener(this);
             client.start();
 
-            Invitacion invitacion = new Invitacion(miId, miNombre);
+            Invitacion invitacion = new Invitacion(MI_ID, miNombre);
             client.send(invitacion.generarTrama());
             setEstado("Esperando respuesta", new Color(255, 230, 153));
             appendSistema("Invitacion 001 enviada a " + ip);
@@ -133,7 +313,7 @@ public class ChatUI extends JFrame implements ChatEventListener {
                 if (texto.isEmpty()) {
                     return;
                 }
-                MensajeChat mensajeChat = new MensajeChat(miId, UUID.randomUUID().toString(), texto);
+                MensajeChat mensajeChat = new MensajeChat(MI_ID, UUID.randomUUID().toString(), texto);
                 String trama = mensajeChat.generarTrama();
                 boolean enviado = false;
                 if (idContactoActual != null) {
@@ -172,6 +352,21 @@ public class ChatUI extends JFrame implements ChatEventListener {
 
     @Override
     public void onInvitacionRecibida(Invitacion inv, SocketClient sender) {
+        BlackListDao blackListDao = new BlackListDao();
+        String ipRemota = sender.getIp();
+        guardarOActualizarContacto(inv.getIdUsuario(), inv.getNombre(), ipRemota, false);
+
+        if (blackListDao.isBlacklisted(ipRemota)) {
+            try {
+                RechazoConexion rechazo = new RechazoConexion();
+                sender.send(rechazo.generarTrama());
+                sender.close();
+                SwingUtilities.invokeLater(() -> appendSistema("Solicitud rechazada (IP en lista negra)."));
+            } catch (Exception e) {
+                SwingUtilities.invokeLater(() -> appendSistema("Error al rechazar automaticamente."));
+            }
+            return;
+        }
         SwingUtilities.invokeLater(() -> {
             int respuesta = JOptionPane.showConfirmDialog(
                     this,
@@ -182,18 +377,26 @@ public class ChatUI extends JFrame implements ChatEventListener {
 
             try {
                 if (respuesta == JOptionPane.YES_OPTION) {
-                    AceptacionInvitacion aceptacion = new AceptacionInvitacion(miId, miNombre);
+                    AceptacionInvitacion aceptacion = new AceptacionInvitacion(MI_ID, miNombre);
                     sender.send(aceptacion.generarTrama());
                     client = sender;
                     idContactoActual = inv.getIdUsuario();
                     nombreContactoActual = inv.getNombre();
                     setEstado("Conectado", new Color(187, 247, 208));
                     setContacto(nombreContactoActual);
+                    guardarOActualizarContacto(inv.getIdUsuario(), inv.getNombre(), sender.getIp(), true);
+                    marcarContactoOnline(inv.getIdUsuario(), true);
+                    seleccionarContactoEnLista(inv.getIdUsuario());
                     appendSistema("Conexion aceptada. Ya pueden chatear.");
                 } else {
                     RechazoConexion rechazo = new RechazoConexion();
                     sender.send(rechazo.generarTrama());
-                    appendSistema("Conexion rechazada.");
+
+                    BlackListDao blackListDao2 = new BlackListDao();
+
+                    blackListDao2.addToBlacklist(sender.getIp());
+
+                    appendSistema("Conexion rechazada y agregada a lista negra.");
                 }
             } catch (Exception e) {
                 appendSistema("Error al responder invitacion.");
@@ -209,6 +412,9 @@ public class ChatUI extends JFrame implements ChatEventListener {
             nombreContactoActual = acc.getNombre();
             setEstado("Conectado", new Color(187, 247, 208));
             setContacto(nombreContactoActual);
+            guardarOActualizarContacto(acc.getIdUsuario(), acc.getNombre(), sender.getIp(), true);
+            marcarContactoOnline(acc.getIdUsuario(), true);
+            seleccionarContactoEnLista(acc.getIdUsuario());
             appendSistema(acc.getNombre() + " acepto tu invitacion 002.");
         });
     }
@@ -224,11 +430,38 @@ public class ChatUI extends JFrame implements ChatEventListener {
     @Override
     public void onMensajeRecibido(MensajeChat mensaje, SocketClient sender) {
         SwingUtilities.invokeLater(() -> {
+            Contact contactoActual = buscarContactoPorId(mensaje.getIdUser());
+            String nombre = contactoActual != null ? contactoActual.getName() : mensaje.getIdUser();
+            guardarOActualizarContacto(mensaje.getIdUser(), nombre, sender.getIp(), true);
             if (idContactoActual == null) {
                 idContactoActual = mensaje.getIdUser();
+                Contact contacto = buscarContactoPorId(idContactoActual);
+                if (contacto != null) {
+                    nombreContactoActual = contacto.getName();
+                }
                 setContacto(nombreContactoActual);
             }
+            marcarContactoOnline(mensaje.getIdUser(), true);
+            seleccionarContactoEnLista(mensaje.getIdUser());
             appendContacto(mensaje.getMensaje());
+        });
+    }
+
+    @Override
+    public void onClienteOffline(String idUsuario, SocketClient sender) {
+        SwingUtilities.invokeLater(() -> {
+            marcarContactoOnline(idUsuario, false);
+            if (idUsuario != null && idUsuario.equals(idContactoActual)) {
+                setEstado("Desconectado", new Color(255, 230, 153));
+                appendSistema("El contacto se ha desconectado (0018).");
+                if (client != null) {
+                    client.close();
+                    client = null;
+                }
+                idContactoActual = null;
+                nombreContactoActual = "Sin contacto";
+                setContacto(nombreContactoActual);
+            }
         });
     }
 
@@ -251,5 +484,24 @@ public class ChatUI extends JFrame implements ChatEventListener {
 
     private void setContacto(String nombre) {
         lblContacto.setText("Contacto: " + nombre);
+    }
+
+    private static class ContactCellRenderer extends DefaultListCellRenderer {
+        @Override
+        public java.awt.Component getListCellRendererComponent(
+                JList<?> list,
+                Object value,
+                int index,
+                boolean isSelected,
+                boolean cellHasFocus
+        ) {
+            JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            if (value instanceof Contact) {
+                Contact c = (Contact) value;
+                String estado = c.isStateConnect() ? "[ON]" : "[OFF]";
+                label.setText(estado + " " + c.getName());
+            }
+            return label;
+        }
     }
 }

@@ -10,4 +10,5 @@ public interface ChatEventListener {
     void onAceptacionRecibida(AceptacionInvitacion acc, SocketClient sender);
     void onRechazoRecibido(RechazoConexion rechazo, SocketClient sender);
     void onMensajeRecibido(MensajeChat mensaje, SocketClient sender);
+    void onClienteOffline(String idUsuario, SocketClient sender);
 }

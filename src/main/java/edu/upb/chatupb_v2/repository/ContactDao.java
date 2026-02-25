@@ -11,28 +11,28 @@ import java.util.List;
 @Slf4j
 public class ContactDao {
 
-
-    private DaoHelper<Contact> helper;
+    private final DaoHelper<Contact> helper;
 
     public ContactDao() {
         helper = new DaoHelper<>();
     }
 
     DaoHelper.ResultReader<Contact> resultReader = result -> {
-        Contact prefacturaSync = new Contact();
+        Contact contact = new Contact();
+
         if (existColumn(result, Contact.Column.ID)) {
-            prefacturaSync.setId(result.getLong(Contact.Column.ID));
+            contact.setId(result.getLong(Contact.Column.ID));
         }
         if (existColumn(result, Contact.Column.CODE)) {
-            prefacturaSync.setCode(result.getString(Contact.Column.CODE));
+            contact.setCode(result.getString(Contact.Column.CODE));
         }
         if (existColumn(result, Contact.Column.NAME)) {
-            prefacturaSync.setName(result.getString(Contact.Column.NAME));
+            contact.setName(result.getString(Contact.Column.NAME));
         }
         if (existColumn(result, Contact.Column.IP)) {
-            prefacturaSync.setIp(result.getString(Contact.Column.IP));
+            contact.setIp(result.getString(Contact.Column.IP));
         }
-        return prefacturaSync;
+        return contact;
     };
 
     public static boolean existColumn(ResultSet result, String columnName) {
@@ -40,7 +40,7 @@ public class ContactDao {
             result.findColumn(columnName);
             return true;
         } catch (SQLException sqlex) {
-            //log.error("No se encontro la columna: {}", columnName); // log innecesario
+            // log innecesario
         }
         return false;
     }
@@ -52,18 +52,20 @@ public class ContactDao {
 
     public boolean exist(String argument) throws ConnectException, SQLException {
         String query = "SELECT count(*) FROM contact WHERE " + argument;
-        return helper.executeQueryCount(query, null) == 1;
+        return helper.executeQueryCount(query, null) > 0; 
     }
 
     public boolean existByCode(String code) throws ConnectException, SQLException {
-        String query = "SELECT count(*) FROM contact WHERE code='" + code + "'";
-        return helper.executeQueryCount(query, null) == 1;
+        String query = "SELECT count(*) FROM contact WHERE code = ?";
+        DaoHelper.QueryParameters params = pst -> pst.setString(1, code);
+        return helper.executeQueryCount(query, params) > 0; 
     }
 
     public Contact findByCode(String code) throws ConnectException, SQLException {
-        String query = "SELECT * FROM contact WHERE code ='" + code + "'";
-        System.out.println(query);
-        List<Contact> list = helper.executeQuery(query, resultReader);
+        String query = "SELECT * FROM contact WHERE code = ?";
+        DaoHelper.QueryParameters params = pst -> pst.setString(1, code);
+
+        List<Contact> list = helper.executeQuery(query, params, resultReader);
         if (list.isEmpty()) {
             return null;
         }
@@ -76,6 +78,7 @@ public class ContactDao {
 
     public void save(Contact contact) throws Exception {
         String query = "INSERT INTO contact(code, name, ip) values (?,?,?)";
+
         DaoHelper.QueryParameters params = new DaoHelper.QueryParameters() {
             @Override
             public void setParameters(PreparedStatement pst) throws SQLException {
@@ -84,18 +87,22 @@ public class ContactDao {
                 pst.setString(3, contact.getIp());
             }
         };
+
         helper.insert(query, params, contact);
     }
 
     public void update(Contact contact) throws Exception {
-        String query = "UPDATE contact SET IP=? WHERE code =?";
+        String query = "UPDATE contact SET name = ?, ip = ? WHERE code = ?";
+
         DaoHelper.QueryParameters params = new DaoHelper.QueryParameters() {
             @Override
             public void setParameters(PreparedStatement pst) throws SQLException {
-                pst.setString(1, contact.getIp());
-                pst.setString(2, contact.getCode());
+                pst.setString(1, contact.getName());
+                pst.setString(2, contact.getIp());
+                pst.setString(3, contact.getCode());
             }
         };
+
         helper.update(query, params);
     }
 
