@@ -1,16 +1,20 @@
-package edu.upb.chatupb_v2;
+package edu.upb.chatupb_v2.view;
 
-import edu.upb.chatupb_v2.bl.message.AceptacionInvitacion;
-import edu.upb.chatupb_v2.bl.message.Invitacion;
-import edu.upb.chatupb_v2.bl.message.MensajeChat;
-import edu.upb.chatupb_v2.bl.message.Offline;
-import edu.upb.chatupb_v2.bl.message.RechazoConexion;
-import edu.upb.chatupb_v2.bl.server.ChatEventListener;
-import edu.upb.chatupb_v2.bl.server.ClientMediator;
-import edu.upb.chatupb_v2.bl.server.SocketClient;
-import edu.upb.chatupb_v2.repository.BlackListDao;
-import edu.upb.chatupb_v2.repository.Contact;
-import edu.upb.chatupb_v2.repository.ContactDao;
+import edu.upb.chatupb_v2.controller.ConnectionController;
+import edu.upb.chatupb_v2.controller.exception.OperationException;
+import edu.upb.chatupb_v2.model.entities.AceptarHello;
+import edu.upb.chatupb_v2.model.entities.AceptacionInvitacion;
+import edu.upb.chatupb_v2.model.entities.Invitacion;
+import edu.upb.chatupb_v2.model.entities.Hello;
+import edu.upb.chatupb_v2.model.entities.MensajeChat;
+import edu.upb.chatupb_v2.model.entities.RechazarHello;
+import edu.upb.chatupb_v2.model.entities.RechazoConexion;
+import edu.upb.chatupb_v2.model.network.ChatEventListener;
+import edu.upb.chatupb_v2.model.network.SocketClient;
+import edu.upb.chatupb_v2.controller.ContactController;
+import edu.upb.chatupb_v2.controller.MessageController;
+import edu.upb.chatupb_v2.model.repository.BlackListDao;
+import edu.upb.chatupb_v2.model.entities.Contact;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -20,14 +24,16 @@ import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.List;
-import java.util.UUID;
 
-public class ChatUI extends JFrame implements ChatEventListener {
-    private SocketClient client;
+public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     private static final String MI_ID = "af3bc20a-766c-4cd4-813d-b1067a01fa9a";
     private final String miNombre = System.getProperty("user.name", "Alan");
-    private final ContactDao contactDao = new ContactDao();
+    private ConnectionController connectionController;
+    private ContactController contactController;
+    private MessageController messageController;
     private final DefaultListModel<Contact> contactModel = new DefaultListModel<>();
 
     private String idContactoActual;
@@ -46,7 +52,32 @@ public class ChatUI extends JFrame implements ChatEventListener {
 
     public ChatUI() {
         initUI();
-        cargarContactosIniciales();
+    }
+
+    public void setConnectionController(ConnectionController connectionController) {
+        this.connectionController = connectionController;
+    }
+
+    public void setContactController(ContactController contactController) {
+        this.contactController = contactController;
+        if (this.contactController != null) {
+            try {
+                this.contactController.onload();
+            } catch (OperationException e) {
+                appendSistema(e.getMessage());
+            }
+        }
+    }
+
+    public void setMessageController(MessageController messageController) {
+        this.messageController = messageController;
+        if (this.messageController != null) {
+            try {
+                this.messageController.onload();
+            } catch (OperationException e) {
+                appendSistema(e.getMessage());
+            }
+        }
     }
 
     private void initUI() {
@@ -104,6 +135,14 @@ public class ChatUI extends JFrame implements ChatEventListener {
         connectBar.add(txtIp);
         btnConectar = new JButton("Conectar");
         btnConectar.addActionListener(e -> conectar());
+        btnConectar.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (SwingUtilities.isRightMouseButton(e)) {
+                    conectarAutomatico();
+                }
+            }
+        });
         connectBar.add(btnConectar);
 
         areaChat = new JTextArea();
@@ -148,47 +187,22 @@ public class ChatUI extends JFrame implements ChatEventListener {
     }
 
     private void ponermeOffline() {
-        if (client == null) {
+        if (connectionController == null) {
             appendSistema("No hay conexion activa.");
             return;
         }
         try {
-            Offline offline = new Offline(MI_ID);
-            client.send(offline.generarTrama());
-        } catch (Exception e) {
-            appendSistema("No se pudo enviar offline (0018).");
-        } finally {
-            try {
-                client.close();
-            } catch (Exception ignored) {
-            }
-            client = null;
+            connectionController.ponermeOffline(MI_ID, idContactoActual);
             marcarContactoOnline(idContactoActual, false);
-            if (idContactoActual != null) {
-                ClientMediator.getInstance().removerCliente(idContactoActual);
-            }
             idContactoActual = null;
             nombreContactoActual = "Sin contacto";
             setContacto(nombreContactoActual);
             setEstado("Desconectado", new Color(255, 230, 153));
             appendSistema("Te desconectaste (0018).");
+        } catch (OperationException e) {
+            appendSistema(e.getMessage());
         }
     }
-//
-    private void cargarContactosIniciales() {
-        contactModel.clear();
-        try {
-            List<Contact> contactos = contactDao.findAll();
-            for (Contact c : contactos) {
-                c.setStateConnect(false);
-                contactModel.addElement(c);
-            }
-            appendSistema("Contactos cargados: " + contactos.size());
-        } catch (Exception e) {
-            appendSistema("No se pudieron cargar contactos de la BD.");
-        }
-    }
-
     private void onContactoSeleccionado() {
         Contact seleccionado = listContactos.getSelectedValue();
         if (seleccionado == null) {
@@ -206,33 +220,25 @@ public class ChatUI extends JFrame implements ChatEventListener {
         } else {
             setEstado("Sin conexion", new Color(255, 230, 153));
         }
+        if (messageController != null) {
+            try {
+                messageController.cargarHistorial(MI_ID, idContactoActual);
+            } catch (OperationException e) {
+                appendSistema(e.getMessage());
+            }
+        }
     }
 
-    private void guardarOActualizarContacto(String idUsuario, String nombre, String ip, boolean online) {
-        if (idUsuario == null || idUsuario.isBlank()) {
-            return;
+    private Contact guardarOActualizarConControlador(String idUsuario, String nombre, String ip, boolean online) {
+        if (contactController == null) {
+            appendSistema("Controlador de contactos no configurado.");
+            return null;
         }
-
         try {
-            Contact contacto = contactDao.findByCode(idUsuario);
-            if (contacto == null) {
-                contacto = new Contact();
-                contacto.setCode(idUsuario);
-                contacto.setName((nombre == null || nombre.isBlank()) ? idUsuario : nombre);
-                contacto.setIp(ip);
-                contactDao.save(contacto);
-            } else {
-                if (nombre != null && !nombre.isBlank()) {
-                    contacto.setName(nombre);
-                }
-                contacto.setIp(ip);
-                contactDao.update(contacto);
-            }
-
-            contacto.setStateConnect(online);
-            upsertContactoEnLista(contacto);
-        } catch (Exception e) {
-            appendSistema("No se pudo guardar el contacto en BD.");
+            return contactController.guardarOActualizarContacto(idUsuario, nombre, ip, online);
+        } catch (OperationException e) {
+            appendSistema(e.getMessage());
+            return null;
         }
     }
 
@@ -287,46 +293,50 @@ public class ChatUI extends JFrame implements ChatEventListener {
     }
 
     private void conectar() {
+        if (connectionController == null) {
+            appendSistema("Controlador de conexion no configurado.");
+            return;
+        }
+        String ip = txtIp.getText().trim();
+        if (ip.isEmpty()) {
+            ip = "127.0.0.1";
+            txtIp.setText(ip);
+        }
         try {
-            String ip = txtIp.getText().trim();
-            if (ip.isEmpty()) {
-                ip = "127.0.0.1";
-                txtIp.setText(ip);
-            }
-
-            client = new SocketClient(ip);
-            client.start();
-
-            Invitacion invitacion = new Invitacion(MI_ID, miNombre);
-            client.send(invitacion.generarTrama());
+            connectionController.conectarPorIp(ip, MI_ID, miNombre);
             setEstado("Esperando respuesta", new Color(255, 230, 153));
-            appendSistema("Invitacion 001 enviada a " + ip);
-        } catch (Exception e) {
-            appendSistema("No se pudo conectar: " + e.getMessage());
+        } catch (OperationException e) {
+            appendSistema(e.getMessage());
+        }
+    }
+
+    private void conectarAutomatico() {
+        if (connectionController == null) {
+            appendSistema("Controlador de conexion no configurado.");
+            return;
+        }
+        String ip = txtIp.getText().trim();
+        if (ip.isEmpty()) {
+            ip = "127.0.0.1";
+            txtIp.setText(ip);
+        }
+        try {
+            connectionController.conectarAutomaticoPorIp(ip, MI_ID);
+            setEstado("Esperando respuesta", new Color(255, 230, 153));
+        } catch (OperationException e) {
+            appendSistema(e.getMessage());
         }
     }
 
     private void enviarMensajeChat() {
-        if (client != null) {
-            try {
-                String texto = txtMensaje.getText().trim();
-                if (texto.isEmpty()) {
-                    return;
-                }
-                MensajeChat mensajeChat = new MensajeChat(MI_ID, UUID.randomUUID().toString(), texto);
-                String trama = mensajeChat.generarTrama();
-                boolean enviado = false;
-                if (idContactoActual != null) {
-                    enviado = ClientMediator.getInstance().enviarMensaje(idContactoActual, trama);
-                }
-                if (!enviado) {
-                    client.send(trama);
-                }
-                appendYo(texto);
-                txtMensaje.setText("");
-            } catch (Exception e) {
-                appendSistema("No se pudo enviar mensaje");
-            }
+        if (messageController == null) {
+            appendSistema("Controlador de mensajes no configurado.");
+            return;
+        }
+        try {
+            messageController.enviarMensaje(MI_ID, idContactoActual, txtMensaje.getText());
+        } catch (OperationException e) {
+            appendSistema(e.getMessage());
         }
     }
 
@@ -354,15 +364,16 @@ public class ChatUI extends JFrame implements ChatEventListener {
     public void onInvitacionRecibida(Invitacion inv, SocketClient sender) {
         BlackListDao blackListDao = new BlackListDao();
         String ipRemota = sender.getIp();
-        guardarOActualizarContacto(inv.getIdUsuario(), inv.getNombre(), ipRemota, false);
+        guardarOActualizarConControlador(inv.getIdUsuario(), inv.getNombre(), ipRemota, false);
 
         if (blackListDao.isBlacklisted(ipRemota)) {
             try {
-                RechazoConexion rechazo = new RechazoConexion();
-                sender.send(rechazo.generarTrama());
-                sender.close();
+                if (connectionController == null) {
+                    throw new OperationException("Controlador de conexion no configurado.");
+                }
+                connectionController.rechazarInvitacion(sender, true);
                 SwingUtilities.invokeLater(() -> appendSistema("Solicitud rechazada (IP en lista negra)."));
-            } catch (Exception e) {
+            } catch (OperationException e) {
                 SwingUtilities.invokeLater(() -> appendSistema("Error al rechazar automaticamente."));
             }
             return;
@@ -377,20 +388,23 @@ public class ChatUI extends JFrame implements ChatEventListener {
 
             try {
                 if (respuesta == JOptionPane.YES_OPTION) {
-                    AceptacionInvitacion aceptacion = new AceptacionInvitacion(MI_ID, miNombre);
-                    sender.send(aceptacion.generarTrama());
-                    client = sender;
+                    if (connectionController == null) {
+                        throw new OperationException("Controlador de conexion no configurado.");
+                    }
+                    connectionController.aceptarInvitacion(sender, MI_ID, miNombre);
                     idContactoActual = inv.getIdUsuario();
                     nombreContactoActual = inv.getNombre();
                     setEstado("Conectado", new Color(187, 247, 208));
                     setContacto(nombreContactoActual);
-                    guardarOActualizarContacto(inv.getIdUsuario(), inv.getNombre(), sender.getIp(), true);
+                    guardarOActualizarConControlador(inv.getIdUsuario(), inv.getNombre(), sender.getIp(), true);
                     marcarContactoOnline(inv.getIdUsuario(), true);
                     seleccionarContactoEnLista(inv.getIdUsuario());
                     appendSistema("Conexion aceptada. Ya pueden chatear.");
                 } else {
-                    RechazoConexion rechazo = new RechazoConexion();
-                    sender.send(rechazo.generarTrama());
+                    if (connectionController == null) {
+                        throw new OperationException("Controlador de conexion no configurado.");
+                    }
+                    connectionController.rechazarInvitacion(sender, false);
 
                     BlackListDao blackListDao2 = new BlackListDao();
 
@@ -398,8 +412,8 @@ public class ChatUI extends JFrame implements ChatEventListener {
 
                     appendSistema("Conexion rechazada y agregada a lista negra.");
                 }
-            } catch (Exception e) {
-                appendSistema("Error al responder invitacion.");
+            } catch (OperationException e) {
+                appendSistema(e.getMessage());
             }
         });
     }
@@ -407,12 +421,14 @@ public class ChatUI extends JFrame implements ChatEventListener {
     @Override
     public void onAceptacionRecibida(AceptacionInvitacion acc, SocketClient sender) {
         SwingUtilities.invokeLater(() -> {
-            client = sender;
+            if (connectionController != null) {
+                connectionController.usarConexion(sender);
+            }
             idContactoActual = acc.getIdUsuario();
             nombreContactoActual = acc.getNombre();
             setEstado("Conectado", new Color(187, 247, 208));
             setContacto(nombreContactoActual);
-            guardarOActualizarContacto(acc.getIdUsuario(), acc.getNombre(), sender.getIp(), true);
+            guardarOActualizarConControlador(acc.getIdUsuario(), acc.getNombre(), sender.getIp(), true);
             marcarContactoOnline(acc.getIdUsuario(), true);
             seleccionarContactoEnLista(acc.getIdUsuario());
             appendSistema(acc.getNombre() + " acepto tu invitacion 002.");
@@ -428,11 +444,94 @@ public class ChatUI extends JFrame implements ChatEventListener {
     }
 
     @Override
+    public void onHelloRecibido(Hello hello, SocketClient sender) {
+        if (hello == null) {
+            return;
+        }
+
+        boolean existe;
+        try {
+            if (contactController == null) {
+                throw new OperationException("Controlador de contactos no configurado.");
+            }
+            existe = contactController.existeContactoPorCodigo(hello.getIdUsuario());
+        } catch (OperationException e) {
+            SwingUtilities.invokeLater(() -> appendSistema(e.getMessage()));
+            return;
+        }
+
+        if (!existe) {
+            try {
+                if (connectionController == null) {
+                    throw new OperationException("Controlador de conexion no configurado.");
+                }
+                connectionController.rechazarHello(sender, true);
+                SwingUtilities.invokeLater(() -> {
+                    setEstado("Sin conexion", new Color(255, 230, 153));
+                    appendSistema("Conexion automatica rechazada (006).");
+                });
+            } catch (OperationException e) {
+                SwingUtilities.invokeLater(() -> appendSistema(e.getMessage()));
+            }
+            return;
+        }
+
+        SwingUtilities.invokeLater(() -> {
+            try {
+                if (connectionController == null) {
+                    throw new OperationException("Controlador de conexion no configurado.");
+                }
+                connectionController.aceptarHello(sender, MI_ID);
+                idContactoActual = hello.getIdUsuario();
+                Contact contacto = buscarContactoPorId(idContactoActual);
+                nombreContactoActual = contacto != null ? contacto.getName() : idContactoActual;
+                guardarOActualizarConControlador(idContactoActual, nombreContactoActual, sender.getIp(), true);
+                marcarContactoOnline(idContactoActual, true);
+                seleccionarContactoEnLista(idContactoActual);
+                setEstado("Conectado", new Color(187, 247, 208));
+                setContacto(nombreContactoActual);
+                appendSistema("Conexion automatica aceptada (005).");
+            } catch (OperationException e) {
+                appendSistema(e.getMessage());
+            }
+        });
+    }
+
+    @Override
+    public void onAceptarHelloRecibido(AceptarHello aceptarHello, SocketClient sender) {
+        SwingUtilities.invokeLater(() -> {
+            if (connectionController != null) {
+                connectionController.usarConexion(sender);
+            }
+            idContactoActual = aceptarHello.getIdUsuario();
+            Contact contacto = buscarContactoPorId(idContactoActual);
+            nombreContactoActual = contacto != null ? contacto.getName() : idContactoActual;
+            guardarOActualizarConControlador(idContactoActual, nombreContactoActual, sender.getIp(), true);
+            marcarContactoOnline(idContactoActual, true);
+            seleccionarContactoEnLista(idContactoActual);
+            setEstado("Conectado", new Color(187, 247, 208));
+            setContacto(nombreContactoActual);
+            appendSistema("Conexion automatica establecida (005).");
+        });
+    }
+
+    @Override
+    public void onRechazarHelloRecibido(RechazarHello rechazoHello, SocketClient sender) {
+        SwingUtilities.invokeLater(() -> {
+            if (connectionController != null) {
+                connectionController.cerrarConexionActual();
+            }
+            setEstado("Rechazado", new Color(254, 202, 202));
+            appendSistema("La conexion automatica fue rechazada (006).");
+        });
+    }
+
+    @Override
     public void onMensajeRecibido(MensajeChat mensaje, SocketClient sender) {
         SwingUtilities.invokeLater(() -> {
             Contact contactoActual = buscarContactoPorId(mensaje.getIdUser());
             String nombre = contactoActual != null ? contactoActual.getName() : mensaje.getIdUser();
-            guardarOActualizarContacto(mensaje.getIdUser(), nombre, sender.getIp(), true);
+            guardarOActualizarConControlador(mensaje.getIdUser(), nombre, sender.getIp(), true);
             if (idContactoActual == null) {
                 idContactoActual = mensaje.getIdUser();
                 Contact contacto = buscarContactoPorId(idContactoActual);
@@ -443,7 +542,15 @@ public class ChatUI extends JFrame implements ChatEventListener {
             }
             marcarContactoOnline(mensaje.getIdUser(), true);
             seleccionarContactoEnLista(mensaje.getIdUser());
-            appendContacto(mensaje.getMensaje());
+            if (messageController != null) {
+                try {
+                    messageController.recibirMensaje(mensaje);
+                } catch (OperationException e) {
+                    appendSistema(e.getMessage());
+                }
+            } else {
+                appendContacto(mensaje.getMensaje());
+            }
         });
     }
 
@@ -454,9 +561,8 @@ public class ChatUI extends JFrame implements ChatEventListener {
             if (idUsuario != null && idUsuario.equals(idContactoActual)) {
                 setEstado("Desconectado", new Color(255, 230, 153));
                 appendSistema("El contacto se ha desconectado (0018).");
-                if (client != null) {
-                    client.close();
-                    client = null;
+                if (connectionController != null) {
+                    connectionController.cerrarConexionActual();
                 }
                 idContactoActual = null;
                 nombreContactoActual = "Sin contacto";
@@ -486,6 +592,47 @@ public class ChatUI extends JFrame implements ChatEventListener {
         lblContacto.setText("Contacto: " + nombre);
     }
 
+    @Override
+    public void onload(List<Contact> contactos) {
+        SwingUtilities.invokeLater(() -> {
+            contactModel.clear();
+            for (Contact c : contactos) {
+                contactModel.addElement(c);
+            }
+            appendSistema("Contactos cargados: " + contactos.size());
+        });
+    }
+
+    @Override
+    public void mostrarMensajeSistema(String mensaje) {
+        SwingUtilities.invokeLater(() -> appendSistema(mensaje));
+    }
+
+    @Override
+    public void refrescarContacto(Contact contacto) {
+        SwingUtilities.invokeLater(() -> upsertContactoEnLista(contacto));
+    }
+
+    @Override
+    public void mostrarMensajePropio(String mensaje) {
+        SwingUtilities.invokeLater(() -> appendYo(mensaje));
+    }
+
+    @Override
+    public void mostrarMensajeContacto(String mensaje) {
+        SwingUtilities.invokeLater(() -> appendContacto(mensaje));
+    }
+
+    @Override
+    public void limpiarMensajes() {
+        SwingUtilities.invokeLater(() -> areaChat.setText(""));
+    }
+
+    @Override
+    public void limpiarInputMensaje() {
+        SwingUtilities.invokeLater(() -> txtMensaje.setText(""));
+    }
+
     private static class ContactCellRenderer extends DefaultListCellRenderer {
         @Override
         public java.awt.Component getListCellRendererComponent(
@@ -505,3 +652,4 @@ public class ChatUI extends JFrame implements ChatEventListener {
         }
     }
 }
+

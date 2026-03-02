@@ -1,6 +1,6 @@
-package edu.upb.chatupb_v2.repository;
+package edu.upb.chatupb_v2.model.repository;
 
-import lombok.extern.slf4j.Slf4j;
+import edu.upb.chatupb_v2.model.entities.Contact;
 
 import java.net.ConnectException;
 import java.sql.PreparedStatement;
@@ -8,9 +8,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.List;
 
-@Slf4j
 public class ContactDao {
-
     private final DaoHelper<Contact> helper;
 
     public ContactDao() {
@@ -115,3 +113,4 @@ public class ContactDao {
         helper.update(query, null);
     }
 }
+

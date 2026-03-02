@@ -1,4 +1,4 @@
-package edu.upb.chatupb_v2.bl.message;
+package edu.upb.chatupb_v2.model.entities;
 
 public class RechazoConexion extends Message {
 
@@ -18,3 +18,4 @@ public class RechazoConexion extends Message {
         return getCodigo() + System.lineSeparator();
     }
 }
+

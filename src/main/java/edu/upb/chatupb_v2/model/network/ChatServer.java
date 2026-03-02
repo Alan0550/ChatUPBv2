@@ -1,8 +1,4 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
-package edu.upb.chatupb_v2.bl.server;
+package edu.upb.chatupb_v2.model.network;
 
 import java.io.IOException;
 import java.net.ServerSocket;
@@ -28,6 +24,7 @@ public class ChatServer extends Thread {
         while (true) {
             try {
                 SocketClient socketClient = new SocketClient(this.server.accept());
+                socketClient.addListener(ClientMediator.getInstance());
                 socketClient.start();
             } catch (Exception e) {
                 e.printStackTrace();

@@ -1,4 +1,4 @@
-package edu.upb.chatupb_v2.repository;
+package edu.upb.chatupb_v2.model.repository;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -27,13 +27,13 @@ public class ConnectionDB {
             Class.forName("com.mysql.cj.jdbc.Driver");
 
             Connection conn = DriverManager.getConnection(DB_URL, DB_USER, DB_PASSWORD);
-            System.out.println("Conexión MySQL exitosa.");
+            System.out.println("Conexion MySQL exitosa.");
             return conn;
 
         } catch (SQLException e) {
             System.out.println("Error SQL al conectar a MySQL: " + e.getMessage());
         } catch (ClassNotFoundException e) {
-            System.out.println("No se encontró el driver de MySQL (mysql-connector-j).");
+            System.out.println("No se encontro el driver de MySQL (mysql-connector-j).");
         }
         return null;
     }

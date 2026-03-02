@@ -1,4 +1,4 @@
-package edu.upb.chatupb_v2.bl.message;
+package edu.upb.chatupb_v2.model.entities;
 
 public abstract class Message {
     private String codigo;
@@ -15,3 +15,4 @@ public abstract class Message {
 
     public abstract String generarTrama();
 }
+

@@ -2,13 +2,16 @@
  * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
  * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
  */
-package edu.upb.chatupb_v2.bl.server;
+package edu.upb.chatupb_v2.model.network;
 
-import edu.upb.chatupb_v2.bl.message.AceptacionInvitacion;
-import edu.upb.chatupb_v2.bl.message.Invitacion;
-import edu.upb.chatupb_v2.bl.message.MensajeChat;
-import edu.upb.chatupb_v2.bl.message.Offline;
-import edu.upb.chatupb_v2.bl.message.RechazoConexion;
+import edu.upb.chatupb_v2.model.entities.AceptarHello;
+import edu.upb.chatupb_v2.model.entities.AceptacionInvitacion;
+import edu.upb.chatupb_v2.model.entities.Hello;
+import edu.upb.chatupb_v2.model.entities.Invitacion;
+import edu.upb.chatupb_v2.model.entities.MensajeChat;
+import edu.upb.chatupb_v2.model.entities.Offline;
+import edu.upb.chatupb_v2.model.entities.RechazarHello;
+import edu.upb.chatupb_v2.model.entities.RechazoConexion;
 
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
@@ -27,6 +30,7 @@ public class SocketClient extends Thread {
     private final DataOutputStream dout;
     private final BufferedReader br;
     private String remoteClientId;
+    private ChatEventListener listener;
 
     public SocketClient(Socket socket) throws IOException {
         this.socket = socket;
@@ -46,6 +50,10 @@ public class SocketClient extends Thread {
         br = new BufferedReader(new InputStreamReader(this.socket.getInputStream()));
     }
 
+    public void addListener(ChatEventListener listener) {
+        this.listener = listener;
+    }
+
     @Override
     public void run() {
         try {
@@ -62,32 +70,63 @@ public class SocketClient extends Thread {
                         System.out.println("Es invitacion");
                         Invitacion invitacion = Invitacion.parse(message);
                         this.remoteClientId = invitacion.getIdUsuario();
-                        ClientMediator.getInstance().agregarCliente(this.remoteClientId, this);
-                        ClientMediator.getInstance().notificarInvitacion(invitacion, this);
+                        if (listener != null) {
+                            listener.onInvitacionRecibida(invitacion, this);
+                        }
                         break;
                     }
                     case "002": {
                         AceptacionInvitacion aceptacion = AceptacionInvitacion.parse(message);
                         this.remoteClientId = aceptacion.getIdUsuario();
-                        ClientMediator.getInstance().agregarCliente(this.remoteClientId, this);
-                        ClientMediator.getInstance().notificarAceptacion(aceptacion, this);
+                        if (listener != null) {
+                            listener.onAceptacionRecibida(aceptacion, this);
+                        }
                         break;
                     }
                     case "003": {
                         RechazoConexion rechazo = RechazoConexion.parse(message);
-                        ClientMediator.getInstance().notificarRechazo(rechazo, this);
+                        if (listener != null) {
+                            listener.onRechazoRecibido(rechazo, this);
+                        }
+                        break;
+                    }
+                    case "004": {
+                        Hello hello = Hello.parse(message);
+                        this.remoteClientId = hello.getIdUsuario();
+                        if (listener != null) {
+                            listener.onHelloRecibido(hello, this);
+                        }
+                        break;
+                    }
+                    case "005": {
+                        AceptarHello aceptarHello = AceptarHello.parse(message);
+                        this.remoteClientId = aceptarHello.getIdUsuario();
+                        if (listener != null) {
+                            listener.onAceptarHelloRecibido(aceptarHello, this);
+                        }
+                        break;
+                    }
+                    case "006": {
+                        RechazarHello rechazarHello = RechazarHello.parse(message);
+                        if (listener != null) {
+                            listener.onRechazarHelloRecibido(rechazarHello, this);
+                        }
                         break;
                     }
                     case "007": {
                         MensajeChat mensajeChat = MensajeChat.parse(message);
-                        ClientMediator.getInstance().notificarMensaje(mensajeChat, this);
+                        if (listener != null) {
+                            listener.onMensajeRecibido(mensajeChat, this);
+                        }
                         break;
                     
                     }
                     case "0018": {
                         Offline offline = Offline.parse(message);
                         String idUsuario = offline.getIdUsuario();
-                        ClientMediator.getInstance().notificarOffline(idUsuario, this);
+                        if (listener != null) {
+                            listener.onClienteOffline(idUsuario, this);
+                        }
                         break;
                     }
                 }
@@ -128,3 +167,4 @@ public class SocketClient extends Thread {
     }
 
 }
+

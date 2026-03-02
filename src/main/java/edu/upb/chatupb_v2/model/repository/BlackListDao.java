@@ -1,4 +1,4 @@
-package edu.upb.chatupb_v2.repository;
+package edu.upb.chatupb_v2.model.repository;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;

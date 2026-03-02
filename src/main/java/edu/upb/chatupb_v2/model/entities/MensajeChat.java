@@ -1,4 +1,4 @@
-package edu.upb.chatupb_v2.bl.message;
+package edu.upb.chatupb_v2.model.entities;
 
 import java.util.regex.Pattern;
 
@@ -56,3 +56,4 @@ public class MensajeChat extends Message {
         this.mensaje = mensaje;
     }
 }
+

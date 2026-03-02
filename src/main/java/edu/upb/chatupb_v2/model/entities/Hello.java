@@ -1,26 +1,26 @@
-package edu.upb.chatupb_v2.bl.message;
+package edu.upb.chatupb_v2.model.entities;
 
 import java.util.regex.Pattern;
 
-public class Offline extends Message {
+public class Hello extends Message {
 
     private String idUsuario;
 
-    public Offline() {
-        super("0018");
+    public Hello() {
+        super("004");
     }
 
-    public Offline(String idUsuario) {
-        super("0018");
+    public Hello(String idUsuario) {
+        super("004");
         this.idUsuario = idUsuario;
     }
 
-    public static Offline parse(String trama) {
+    public static Hello parse(String trama) {
         String[] split = trama.split(Pattern.quote("|"));
-        if(split.length != 2) {
-            throw new IllegalArgumentException("Formato de trama no válido para 0018");
+        if (split.length != 2) {
+            throw new IllegalArgumentException("Formato de trama no valido para 004");
         }
-        return new Offline(split[1]);
+        return new Hello(split[1]);
     }
 
     @Override
@@ -35,5 +35,4 @@ public class Offline extends Message {
     public void setIdUsuario(String idUsuario) {
         this.idUsuario = idUsuario;
     }
-
 }

@@ -1,18 +1,18 @@
-package edu.upb.chatupb_v2.repository;
-
-import lombok.extern.slf4j.Slf4j;
+package edu.upb.chatupb_v2.model.repository;
 
 import java.net.ConnectException;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Autor      :Ricardo Laredo
  * Date       :21-11-18
  */
-@Slf4j
 public class DaoHelper<T>  {
+    private static final Logger log = Logger.getLogger(DaoHelper.class.getName());
 
     public DaoHelper() {
         super();
@@ -43,7 +43,7 @@ public class DaoHelper<T>  {
         try {
             conn = ConnectionDB.getInstance().getConection();
         } catch (Exception ex) {
-            log.error("No se logro crear conexion a la base de datos", ex);
+            log.log(Level.SEVERE, "No se logro crear conexion a la base de datos", ex);
             throw new ConnectException("No se logro crear conexion a la base de datos");
         }
 
@@ -56,7 +56,7 @@ public class DaoHelper<T>  {
 
             boolean status = st.execute();
             if (!status) {
-                log.info("Estado de Ejecucion: {}", status);
+                log.log(Level.INFO, "Estado de Ejecucion: {0}", status);
             }
 
             if (status) {
@@ -75,14 +75,14 @@ public class DaoHelper<T>  {
             return new ArrayList<>();
 
         } catch (SQLException e) {
-            log.error("Excepcion sql al ejecutar la query : {}  causa => {}", query, e.getMessage());
+            log.log(Level.SEVERE, "Excepcion sql al ejecutar la query : " + query + " causa => " + e.getMessage(), e);
             throw e;
         } catch (Exception e) {
-            log.error("Error desconocido al ejecutar query : {}", query, e);
+            log.log(Level.SEVERE, "Error desconocido al ejecutar query : " + query, e);
             throw e;
         } finally {
             if (st != null) st.close();
-            // conn siempre debería existir si llegamos aquí, pero lo mantenemos seguro
+            // conn siempre deberi­a existir si llegamos aqui­, pero lo mantenemos seguro
             try {
                 if (conn != null && !conn.isClosed()) conn.close();
             } catch (SQLException ignored) {}
@@ -95,7 +95,7 @@ public class DaoHelper<T>  {
         try {
             conn = ConnectionDB.getInstance().getConection();
         } catch (Exception ex) {
-            log.info("No se logro crear conexion a la base de datos", ex);
+            log.log(Level.SEVERE, "No se logro crear conexion a la base de datos", ex);
             throw new SQLException(ex);
         }
 
@@ -114,10 +114,10 @@ public class DaoHelper<T>  {
             }
 
         } catch (SQLException e) {
-            log.error("Excepcion sql al ejecutar la query : {}  causa => {}", query, e.getMessage());
+            log.log(Level.SEVERE, "Excepcion sql al ejecutar la query : " + query + " causa => " + e.getMessage(), e);
             throw new SQLException(e);
         } catch (Exception e) {
-            log.error("Error desconocido al ejecutar query : {}", query, e);
+            log.log(Level.SEVERE, "Error desconocido al ejecutar query : " + query, e);
             throw new Exception(e);
         } finally {
             try {
@@ -136,7 +136,7 @@ public class DaoHelper<T>  {
         try {
             conn = ConnectionDB.getInstance().getConection();
         } catch (Exception ex) {
-            log.error("No se logro crear conexion a la base de datos", ex);
+            log.log(Level.SEVERE, "No se logro crear conexion a la base de datos", ex);
             throw new ConnectException("No se logro crear conexion a la base de datos");
         }
 
@@ -150,10 +150,10 @@ public class DaoHelper<T>  {
             st.executeUpdate();
 
         } catch (SQLException e) {
-            log.error("Excepcion sql al ejecutar la query : {}  causa => {}", query, e.getMessage());
+            log.log(Level.SEVERE, "Excepcion sql al ejecutar la query : " + query + " causa => " + e.getMessage(), e);
             throw e;
         } catch (Exception e) {
-            log.error("Error desconocido al ejecutar query : {}", query, e);
+            log.log(Level.SEVERE, "Error desconocido al ejecutar query : " + query, e);
             throw e;
         } finally {
             if (st != null) st.close();
@@ -171,7 +171,7 @@ public class DaoHelper<T>  {
         try {
             conn = ConnectionDB.getInstance().getConection();
         } catch (Exception ex) {
-            log.error("No se logro crear conexion a la base de datos", ex);
+            log.log(Level.SEVERE, "No se logro crear conexion a la base de datos", ex);
             throw new ConnectException("No se logro crear conexion a la base de datos");
         }
 
@@ -195,10 +195,10 @@ public class DaoHelper<T>  {
             return -1;
 
         } catch (SQLException e) {
-            log.error("Excepcion sql al ejecutar la query : {}  causa => {}", query, e.getMessage());
+            log.log(Level.SEVERE, "Excepcion sql al ejecutar la query : " + query + " causa => " + e.getMessage(), e);
             throw e;
         } catch (Exception e) {
-            log.error("Error desconocido al ejecutar query : {}", query, e);
+            log.log(Level.SEVERE, "Error desconocido al ejecutar query : " + query, e);
             throw e;
         } finally {
             try {
@@ -218,7 +218,7 @@ public class DaoHelper<T>  {
         try {
             conn = ConnectionDB.getInstance().getConection();
         } catch (Exception ex) {
-            log.info("No se logro crear conexion a la base de datos", ex);
+            log.log(Level.SEVERE, "No se logro crear conexion a la base de datos", ex);
             throw new SQLException(ex);
         }
 
@@ -236,10 +236,10 @@ public class DaoHelper<T>  {
             return value;
 
         } catch (SQLException e) {
-            log.error("Excepcion sql al ejecutar la query : {}  causa => {}", query, e.getMessage());
+            log.log(Level.SEVERE, "Excepcion sql al ejecutar la query : " + query + " causa => " + e.getMessage(), e);
             throw new SQLException(e);
         } catch (Exception e) {
-            log.error("Error desconocido al ejecutar query : {}", query, e);
+            log.log(Level.SEVERE, "Error desconocido al ejecutar query : " + query, e);
             throw new Exception(e);
         } finally {
             if (st != null) st.close();
