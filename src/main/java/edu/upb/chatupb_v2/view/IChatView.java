@@ -8,8 +8,10 @@ public interface IChatView {
     void onload(List<Contact> contactos);
     void mostrarMensajeSistema(String mensaje);
     void refrescarContacto(Contact contacto);
+    void mostrarMensajePropio(String idMensaje, String mensaje);
     void mostrarMensajePropio(String mensaje);
     void mostrarMensajeContacto(String mensaje);
+    void marcarMensajeLeido(String idMensaje);
     void limpiarMensajes();
     void limpiarInputMensaje();
 }

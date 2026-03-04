@@ -4,6 +4,7 @@ import edu.upb.chatupb_v2.controller.ConnectionController;
 import edu.upb.chatupb_v2.controller.exception.OperationException;
 import edu.upb.chatupb_v2.model.entities.AceptarHello;
 import edu.upb.chatupb_v2.model.entities.AceptacionInvitacion;
+import edu.upb.chatupb_v2.model.entities.ConfirmacionLectura;
 import edu.upb.chatupb_v2.model.entities.Invitacion;
 import edu.upb.chatupb_v2.model.entities.Hello;
 import edu.upb.chatupb_v2.model.entities.MensajeChat;
@@ -20,21 +21,25 @@ import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class ChatUI extends JFrame implements ChatEventListener, IChatView {
-    private static final String MI_ID = "af3bc20a-766c-4cd4-813d-b1067a01fa9a";
+    private static final String MI_ID = "af3bc20a-766c-43d4-813d-b1067a01fa9a";
     private final String miNombre = System.getProperty("user.name", "Alan");
     private ConnectionController connectionController;
     private ContactController contactController;
     private MessageController messageController;
     private final DefaultListModel<Contact> contactModel = new DefaultListModel<>();
+    private final Map<String, JLabel> indicadoresLectura = new HashMap<>();
 
     private String idContactoActual;
     private String nombreContactoActual = "Sin contacto";
@@ -43,7 +48,8 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     private JButton btnConectar;
     private JLabel lblEstado;
     private JLabel lblContacto;
-    private JTextArea areaChat;
+    private JPanel messagesContainer;
+    private JScrollPane scrollChat;
     private JTextField txtMensaje;
     private JButton btnEnviar;
     private JButton btnOffline;
@@ -103,7 +109,7 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         topRight.setOpaque(false);
         lblContacto = new JLabel("Contacto: " + nombreContactoActual);
         lblContacto.setForeground(Color.WHITE);
-        lblEstado = new JLabel("Estado: Desconectado");
+        lblEstado = new JLabel("Estado: Sin conexion");
         lblEstado.setForeground(new Color(255, 230, 153));
         topRight.add(lblContacto);
         topRight.add(lblEstado);
@@ -125,14 +131,22 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         });
         panelContactos.add(new JScrollPane(listContactos), BorderLayout.CENTER);
 
-        JPanel panelChat = new JPanel(new BorderLayout(0, 8));
-        panelChat.setOpaque(false);
+        JPanel panelChat = new JPanel(new BorderLayout(0, 0));
+        panelChat.setBackground(Color.WHITE);
+        panelChat.setBorder(BorderFactory.createLineBorder(new Color(210, 210, 210)));
 
-        JPanel connectBar = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        connectBar.setOpaque(false);
-        connectBar.add(new JLabel("IP destino:"));
+        JPanel connectBar = new JPanel(new BorderLayout(8, 0));
+        connectBar.setBackground(new Color(245, 247, 246));
+        connectBar.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(210, 210, 210)),
+                new EmptyBorder(8, 8, 8, 8)
+        ));
+
+        JPanel leftControls = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        leftControls.setOpaque(false);
+        leftControls.add(new JLabel("IP destino:"));
         txtIp = new JTextField("127.0.0.1", 16);
-        connectBar.add(txtIp);
+        leftControls.add(txtIp);
         btnConectar = new JButton("Conectar");
         btnConectar.addActionListener(e -> conectar());
         btnConectar.addMouseListener(new MouseAdapter() {
@@ -143,28 +157,36 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
                 }
             }
         });
-        connectBar.add(btnConectar);
+        leftControls.add(btnConectar);
 
-        areaChat = new JTextArea();
-        areaChat.setEditable(false);
-        areaChat.setLineWrap(true);
-        areaChat.setWrapStyleWord(true);
-        areaChat.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        areaChat.setBackground(Color.WHITE);
-        areaChat.setBorder(new EmptyBorder(10, 10, 10, 10));
+        JPanel rightControls = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        rightControls.setOpaque(false);
+        btnOffline = new JButton("Offline");
+        btnOffline.addActionListener(e -> ponermeOffline());
+        rightControls.add(btnOffline);
 
-        JScrollPane scroll = new JScrollPane(areaChat);
-        scroll.setBorder(BorderFactory.createLineBorder(new Color(210, 210, 210)));
+        connectBar.add(leftControls, BorderLayout.WEST);
+        connectBar.add(rightControls, BorderLayout.EAST);
+
+        messagesContainer = new JPanel();
+        messagesContainer.setLayout(new BoxLayout(messagesContainer, BoxLayout.Y_AXIS));
+        messagesContainer.setBackground(Color.WHITE);
+        messagesContainer.setBorder(new EmptyBorder(10, 10, 10, 10));
+
+        scrollChat = new JScrollPane(messagesContainer);
+        scrollChat.setBorder(BorderFactory.createEmptyBorder());
+        scrollChat.getViewport().setBackground(Color.WHITE);
 
         panelChat.add(connectBar, BorderLayout.NORTH);
-        panelChat.add(scroll, BorderLayout.CENTER);
+        panelChat.add(scrollChat, BorderLayout.CENTER);
 
         JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, panelContactos, panelChat);
         splitPane.setDividerLocation(240);
         splitPane.setResizeWeight(0.20);
 
         JPanel bottom = new JPanel(new BorderLayout(8, 0));
-        bottom.setOpaque(false);
+        bottom.setBackground(new Color(245, 247, 246));
+        bottom.setBorder(new EmptyBorder(6, 0, 0, 0));
         txtMensaje = new JTextField();
         btnEnviar = new JButton("Enviar");
         btnEnviar.addActionListener(e -> enviarMensajeChat());
@@ -174,13 +196,6 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         root.add(top, BorderLayout.NORTH);
         root.add(splitPane, BorderLayout.CENTER);
         root.add(bottom, BorderLayout.SOUTH);
-
-        JPanel botton = new JPanel(new BorderLayout(8, 0));
-        botton.setOpaque(false);
-        btnOffline = new JButton("Offline");
-        btnOffline.addActionListener(e -> ponermeOffline());
-        botton.add(btnOffline, BorderLayout.SOUTH);
-        root.add(botton, BorderLayout.EAST);
 
         appendSistema("Tu id: " + MI_ID);
         setSize(980, 620);
@@ -197,7 +212,7 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
             idContactoActual = null;
             nombreContactoActual = "Sin contacto";
             setContacto(nombreContactoActual);
-            setEstado("Desconectado", new Color(255, 230, 153));
+            setEstado("Sin conexion", new Color(255, 230, 153));
             appendSistema("Te desconectaste (0018).");
         } catch (OperationException e) {
             appendSistema(e.getMessage());
@@ -555,11 +570,24 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     }
 
     @Override
+    public void onConfirmacionLecturaRecibida(ConfirmacionLectura confirmacion, SocketClient sender) {
+        SwingUtilities.invokeLater(() -> {
+            if (messageController != null) {
+                try {
+                    messageController.confirmarLecturaRecibida(confirmacion);
+                } catch (OperationException e) {
+                    appendSistema(e.getMessage());
+                }
+            }
+        });
+    }
+
+    @Override
     public void onClienteOffline(String idUsuario, SocketClient sender) {
         SwingUtilities.invokeLater(() -> {
             marcarContactoOnline(idUsuario, false);
             if (idUsuario != null && idUsuario.equals(idContactoActual)) {
-                setEstado("Desconectado", new Color(255, 230, 153));
+                setEstado("Sin conexion", new Color(255, 230, 153));
                 appendSistema("El contacto se ha desconectado (0018).");
                 if (connectionController != null) {
                     connectionController.cerrarConexionActual();
@@ -572,15 +600,19 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     }
 
     private void appendSistema(String texto) {
-        areaChat.append("[Sistema] " + texto + System.lineSeparator());
+        System.out.println("[Sistema] " + texto);
+    }
+
+    private void appendYo(String idMensaje, String texto) {
+        agregarBurbuja(idMensaje, texto, true);
     }
 
     private void appendYo(String texto) {
-        areaChat.append("Yo: " + texto + System.lineSeparator());
+        agregarBurbuja(null, texto, true);
     }
 
     private void appendContacto(String texto) {
-        areaChat.append(nombreContactoActual + ": " + texto + System.lineSeparator());
+        agregarBurbuja(null, texto, false);
     }
 
     private void setEstado(String texto, Color color) {
@@ -614,6 +646,11 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     }
 
     @Override
+    public void mostrarMensajePropio(String idMensaje, String mensaje) {
+        SwingUtilities.invokeLater(() -> appendYo(idMensaje, mensaje));
+    }
+
+    @Override
     public void mostrarMensajePropio(String mensaje) {
         SwingUtilities.invokeLater(() -> appendYo(mensaje));
     }
@@ -624,13 +661,92 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     }
 
     @Override
+    public void marcarMensajeLeido(String idMensaje) {
+        SwingUtilities.invokeLater(() -> {
+            JLabel indicador = indicadoresLectura.get(idMensaje);
+            if (indicador == null) {
+                return;
+            }
+            indicador.setText("leido");
+            indicador.revalidate();
+            indicador.repaint();
+            messagesContainer.revalidate();
+            messagesContainer.repaint();
+        });
+    }
+
+    @Override
     public void limpiarMensajes() {
-        SwingUtilities.invokeLater(() -> areaChat.setText(""));
+        SwingUtilities.invokeLater(() -> {
+            indicadoresLectura.clear();
+            messagesContainer.removeAll();
+            messagesContainer.revalidate();
+            messagesContainer.repaint();
+        });
     }
 
     @Override
     public void limpiarInputMensaje() {
         SwingUtilities.invokeLater(() -> txtMensaje.setText(""));
+    }
+
+    private void agregarBurbuja(String idMensaje, String texto, boolean propia) {
+        JPanel fila = new JPanel(new FlowLayout(propia ? FlowLayout.RIGHT : FlowLayout.LEFT, 0, 6));
+        fila.setOpaque(false);
+
+        JPanel contenido = new JPanel();
+        contenido.setLayout(new BoxLayout(contenido, BoxLayout.Y_AXIS));
+        contenido.setOpaque(false);
+
+        JLabel burbuja = new JLabel(
+                "<html><div style='width: 240px;'>" + escaparHtml(texto) + "</div></html>"
+        );
+        burbuja.setOpaque(true);
+        burbuja.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        burbuja.setForeground(new Color(33, 33, 33));
+        burbuja.setBackground(propia ? new Color(220, 248, 198) : new Color(242, 245, 247));
+        burbuja.setBorder(new EmptyBorder(8, 12, 8, 12));
+        burbuja.setAlignmentX(propia ? Component.RIGHT_ALIGNMENT : Component.LEFT_ALIGNMENT);
+
+        contenido.add(burbuja);
+
+        if (propia && idMensaje != null && !idMensaje.isBlank()) {
+            JLabel indicador = new JLabel(" ");
+            indicador.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+            indicador.setForeground(new Color(18, 140, 126));
+            indicador.setBorder(new EmptyBorder(2, 4, 0, 4));
+            indicador.setAlignmentX(Component.RIGHT_ALIGNMENT);
+            contenido.add(indicador);
+            indicadoresLectura.put(idMensaje, indicador);
+        }
+
+        fila.add(contenido);
+        fila.setAlignmentX(Component.LEFT_ALIGNMENT);
+        fila.setMaximumSize(new Dimension(Integer.MAX_VALUE, fila.getPreferredSize().height));
+
+        messagesContainer.add(fila);
+        messagesContainer.revalidate();
+        messagesContainer.repaint();
+        desplazarChatAlFinal();
+    }
+
+    private void desplazarChatAlFinal() {
+        SwingUtilities.invokeLater(() -> {
+            JScrollBar scrollBar = scrollChat.getVerticalScrollBar();
+            scrollBar.setValue(scrollBar.getMaximum());
+        });
+    }
+
+    private String escaparHtml(String texto) {
+        if (texto == null) {
+            return "";
+        }
+        return texto
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+                .replace("\"", "&quot;")
+                .replace("\n", "<br>");
     }
 
     private static class ContactCellRenderer extends DefaultListCellRenderer {

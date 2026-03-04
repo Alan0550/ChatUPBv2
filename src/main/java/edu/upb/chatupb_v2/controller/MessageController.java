@@ -2,6 +2,7 @@ package edu.upb.chatupb_v2.controller;
 
 import edu.upb.chatupb_v2.controller.exception.OperationException;
 import edu.upb.chatupb_v2.model.entities.ChatMessageRecord;
+import edu.upb.chatupb_v2.model.entities.ConfirmacionLectura;
 import edu.upb.chatupb_v2.model.entities.MensajeChat;
 import edu.upb.chatupb_v2.model.network.ClientMediator;
 import edu.upb.chatupb_v2.model.repository.MessageDao;
@@ -39,7 +40,7 @@ public class MessageController {
                 throw new OperationException("No hay conexion activa.");
             }
 
-            chatView.mostrarMensajePropio(texto.trim());
+            chatView.mostrarMensajePropio(mensajeChat.getIdMensaje(), texto.trim());
             chatView.limpiarInputMensaje();
         } catch (Exception e) {
             if (e instanceof OperationException) {
@@ -54,6 +55,17 @@ public class MessageController {
             return;
         }
         chatView.mostrarMensajeContacto(mensaje.getMensaje());
+        confirmarLectura(mensaje);
+    }
+
+    public void confirmarLecturaRecibida(ConfirmacionLectura confirmacion) {
+        if (confirmacion == null) {
+            return;
+        }
+        if (confirmacion.getIdMensaje() == null || confirmacion.getIdMensaje().isBlank()) {
+            return;
+        }
+        chatView.marcarMensajeLeido(confirmacion.getIdMensaje());
     }
 
     public void cargarHistorial(String miId, String idContactoActual) {
@@ -73,6 +85,20 @@ public class MessageController {
             }
         } catch (Exception e) {
             throw new OperationException("No se pudo cargar el historial del chat.", e);
+        }
+    }
+
+    private void confirmarLectura(MensajeChat mensaje) {
+        if (mensaje.getIdUser() == null || mensaje.getIdUser().isBlank()) {
+            return;
+        }
+        if (mensaje.getIdMensaje() == null || mensaje.getIdMensaje().isBlank()) {
+            return;
+        }
+        try {
+            ConfirmacionLectura confirmacion = new ConfirmacionLectura(mensaje.getIdMensaje());
+            ClientMediator.getInstance().enviarMensaje(mensaje.getIdUser(), confirmacion.generarTrama());
+        } catch (Exception ignored) {
         }
     }
 }

@@ -6,6 +6,7 @@ package edu.upb.chatupb_v2.model.network;
 
 import edu.upb.chatupb_v2.model.entities.AceptarHello;
 import edu.upb.chatupb_v2.model.entities.AceptacionInvitacion;
+import edu.upb.chatupb_v2.model.entities.ConfirmacionLectura;
 import edu.upb.chatupb_v2.model.entities.Hello;
 import edu.upb.chatupb_v2.model.entities.Invitacion;
 import edu.upb.chatupb_v2.model.entities.MensajeChat;
@@ -119,7 +120,13 @@ public class SocketClient extends Thread {
                             listener.onMensajeRecibido(mensajeChat, this);
                         }
                         break;
-                    
+                    }
+                    case "008": {
+                        ConfirmacionLectura confirmacion = ConfirmacionLectura.parse(message);
+                        if (listener != null) {
+                            listener.onConfirmacionLecturaRecibida(confirmacion, this);
+                        }
+                        break;
                     }
                     case "0018": {
                         Offline offline = Offline.parse(message);

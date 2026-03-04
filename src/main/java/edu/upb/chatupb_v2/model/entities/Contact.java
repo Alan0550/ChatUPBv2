@@ -9,7 +9,7 @@ import edu.upb.chatupb_v2.model.repository.Model;
 import java.io.Serializable;
 
 public class Contact implements Serializable, Model {
-    public static final String ME_CODE = "af3bc20a-766c-4cd4-813d-b1067a01fa9a";
+    public static final String ME_CODE = "af3bc20a-766c-43d4-813d-b1067a01fa9a";
 
 
     public static final class Column{
