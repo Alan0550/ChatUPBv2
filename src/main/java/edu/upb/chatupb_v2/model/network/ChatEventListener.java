@@ -3,6 +3,7 @@ package edu.upb.chatupb_v2.model.network;
 import edu.upb.chatupb_v2.model.entities.AceptarHello;
 import edu.upb.chatupb_v2.model.entities.AceptacionInvitacion;
 import edu.upb.chatupb_v2.model.entities.ConfirmacionLectura;
+import edu.upb.chatupb_v2.model.entities.EnviarContacto;
 import edu.upb.chatupb_v2.model.entities.Hello;
 import edu.upb.chatupb_v2.model.entities.Invitacion;
 import edu.upb.chatupb_v2.model.entities.MensajeChat;
@@ -17,6 +18,7 @@ public interface ChatEventListener {
     void onAceptarHelloRecibido(AceptarHello aceptarHello, SocketClient sender);
     void onRechazarHelloRecibido(RechazarHello rechazoHello, SocketClient sender);
     void onMensajeRecibido(MensajeChat mensaje, SocketClient sender);
+    void onEnviarContactoRecibido(EnviarContacto contacto, SocketClient sender);
     void onConfirmacionLecturaRecibida(ConfirmacionLectura confirmacion, SocketClient sender);
     void onClienteOffline(String idUsuario, SocketClient sender);
 }

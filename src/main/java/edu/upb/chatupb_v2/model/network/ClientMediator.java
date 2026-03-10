@@ -5,6 +5,7 @@ import edu.upb.chatupb_v2.model.entities.AceptacionInvitacion;
 import edu.upb.chatupb_v2.model.entities.ChatMessageRecord;
 import edu.upb.chatupb_v2.model.entities.ConfirmacionLectura;
 import edu.upb.chatupb_v2.model.entities.Contact;
+import edu.upb.chatupb_v2.model.entities.EnviarContacto;
 import edu.upb.chatupb_v2.model.entities.Hello;
 import edu.upb.chatupb_v2.model.entities.Invitacion;
 import edu.upb.chatupb_v2.model.entities.MensajeChat;
@@ -95,6 +96,10 @@ public class ClientMediator implements ChatEventListener {
         onMensajeRecibido(mensaje, sender);
     }
 
+    public synchronized void notificarEnviarContacto(EnviarContacto contacto, SocketClient sender) {
+        onEnviarContactoRecibido(contacto, sender);
+    }
+
     public synchronized void notificarConfirmacionLectura(ConfirmacionLectura confirmacion, SocketClient sender) {
         onConfirmacionLecturaRecibida(confirmacion, sender);
     }
@@ -165,6 +170,16 @@ public class ClientMediator implements ChatEventListener {
         }
         if (uiListener != null) {
             uiListener.onMensajeRecibido(mensaje, sender);
+        }
+    }
+
+    @Override
+    public synchronized void onEnviarContactoRecibido(EnviarContacto contacto, SocketClient sender) {
+        if (contacto != null && contacto.getIdUser() != null) {
+            agregarCliente(contacto.getIdUser(), sender);
+        }
+        if (uiListener != null) {
+            uiListener.onEnviarContactoRecibido(contacto, sender);
         }
     }
 

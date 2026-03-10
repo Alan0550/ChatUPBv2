@@ -2,6 +2,8 @@ package edu.upb.chatupb_v2.controller;
 
 import edu.upb.chatupb_v2.controller.exception.OperationException;
 import edu.upb.chatupb_v2.model.entities.Contact;
+import edu.upb.chatupb_v2.model.entities.EnviarContacto;
+import edu.upb.chatupb_v2.model.network.ClientMediator;
 import edu.upb.chatupb_v2.model.repository.ContactDao;
 import edu.upb.chatupb_v2.view.IChatView;
 
@@ -65,6 +67,33 @@ public class ContactController {
             return contactDao.existByCode(idUsuario);
         } catch (Exception e) {
             throw new OperationException("No se pudo validar el contacto en BD.", e);
+        }
+    }
+
+    public void enviarContacto(String idDestino, Contact contactoAEnviar) {
+        if (idDestino == null || idDestino.isBlank()) {
+            throw new OperationException("Selecciona un amigo destino para enviar el contacto.");
+        }
+        if (contactoAEnviar == null || contactoAEnviar.getCode() == null || contactoAEnviar.getCode().isBlank()) {
+            throw new OperationException("Contacto invalido para compartir.");
+        }
+
+        try {
+            String ip = contactoAEnviar.getIp() == null ? "" : contactoAEnviar.getIp().trim();
+            EnviarContacto mensaje = new EnviarContacto(
+                    contactoAEnviar.getCode(),
+                    contactoAEnviar.getName(),
+                    ip
+            );
+            boolean enviado = ClientMediator.getInstance().enviarMensaje(idDestino, mensaje.generarTrama());
+            if (!enviado) {
+                throw new OperationException("No hay conexion activa con el destinatario.");
+            }
+        } catch (Exception e) {
+            if (e instanceof OperationException) {
+                throw (OperationException) e;
+            }
+            throw new OperationException("No se pudo enviar el contacto.", e);
         }
     }
 }

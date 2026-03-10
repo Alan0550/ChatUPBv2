@@ -5,6 +5,7 @@ import edu.upb.chatupb_v2.controller.exception.OperationException;
 import edu.upb.chatupb_v2.model.entities.AceptarHello;
 import edu.upb.chatupb_v2.model.entities.AceptacionInvitacion;
 import edu.upb.chatupb_v2.model.entities.ConfirmacionLectura;
+import edu.upb.chatupb_v2.model.entities.EnviarContacto;
 import edu.upb.chatupb_v2.model.entities.Invitacion;
 import edu.upb.chatupb_v2.model.entities.Hello;
 import edu.upb.chatupb_v2.model.entities.MensajeChat;
@@ -28,6 +29,7 @@ import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -52,6 +54,7 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     private JScrollPane scrollChat;
     private JTextField txtMensaje;
     private JButton btnEnviar;
+    private JButton btnEnviarContacto;
     private JButton btnOffline;
     private JList<Contact> listContactos;
 
@@ -188,10 +191,16 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         bottom.setBackground(new Color(245, 247, 246));
         bottom.setBorder(new EmptyBorder(6, 0, 0, 0));
         txtMensaje = new JTextField();
+        btnEnviarContacto = new JButton("Enviar contacto");
+        btnEnviarContacto.addActionListener(e -> enviarContactoAAmigo());
         btnEnviar = new JButton("Enviar");
         btnEnviar.addActionListener(e -> enviarMensajeChat());
+        JPanel accionesMensaje = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+        accionesMensaje.setOpaque(false);
+        accionesMensaje.add(btnEnviarContacto);
+        accionesMensaje.add(btnEnviar);
         bottom.add(txtMensaje, BorderLayout.CENTER);
-        bottom.add(btnEnviar, BorderLayout.EAST);
+        bottom.add(accionesMensaje, BorderLayout.EAST);
 
         root.add(top, BorderLayout.NORTH);
         root.add(splitPane, BorderLayout.CENTER);
@@ -350,6 +359,64 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         }
         try {
             messageController.enviarMensaje(MI_ID, idContactoActual, txtMensaje.getText());
+        } catch (OperationException e) {
+            appendSistema(e.getMessage());
+        }
+    }
+
+    private void enviarContactoAAmigo() {
+        if (contactController == null) {
+            appendSistema("Controlador de contactos no configurado.");
+            return;
+        }
+        if (idContactoActual == null || idContactoActual.isBlank()) {
+            appendSistema("Selecciona el amigo destino para compartir contacto.");
+            return;
+        }
+
+        List<Contact> contactosCompartibles = new ArrayList<>();
+        List<String> etiquetas = new ArrayList<>();
+        for (int i = 0; i < contactModel.size(); i++) {
+            Contact c = contactModel.getElementAt(i);
+            if (c == null || c.getCode() == null || c.getCode().isBlank()) {
+                continue;
+            }
+            if (c.getCode().equals(idContactoActual) || MI_ID.equals(c.getCode())) {
+                continue;
+            }
+            contactosCompartibles.add(c);
+            etiquetas.add(c.getName() + " (" + c.getCode() + ")");
+        }
+
+        if (contactosCompartibles.isEmpty()) {
+            appendSistema("No hay contactos para compartir.");
+            return;
+        }
+
+        String[] opciones = etiquetas.toArray(new String[0]);
+        Object elegido = JOptionPane.showInputDialog(
+                this,
+                "Selecciona el contacto a compartir con " + nombreContactoActual + ":",
+                "Compartir contacto",
+                JOptionPane.PLAIN_MESSAGE,
+                null,
+                opciones,
+                opciones[0]
+        );
+
+        if (elegido == null) {
+            return;
+        }
+
+        int idx = etiquetas.indexOf(elegido.toString());
+        if (idx < 0) {
+            return;
+        }
+
+        Contact contactoAEnviar = contactosCompartibles.get(idx);
+        try {
+            contactController.enviarContacto(idContactoActual, contactoAEnviar);
+            appendSistema("Contacto enviado: " + contactoAEnviar.getName());
         } catch (OperationException e) {
             appendSistema(e.getMessage());
         }
@@ -565,6 +632,31 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
                 }
             } else {
                 appendContacto(mensaje.getMensaje());
+            }
+        });
+    }
+
+    @Override
+    public void onEnviarContactoRecibido(EnviarContacto contacto, SocketClient sender) {
+        SwingUtilities.invokeLater(() -> {
+            if (contacto == null) {
+                return;
+            }
+
+            String ip = contacto.getIp();
+            if (ip == null || ip.isBlank()) {
+                ip = sender != null ? sender.getIp() : null;
+            }
+
+            Contact guardado = guardarOActualizarConControlador(
+                    contacto.getIdUser(),
+                    contacto.getNombre(),
+                    ip,
+                    false
+            );
+
+            if (guardado != null) {
+                appendSistema("Contacto recibido: " + guardado.getName());
             }
         });
     }
