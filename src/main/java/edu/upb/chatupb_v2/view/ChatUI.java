@@ -5,6 +5,7 @@ import edu.upb.chatupb_v2.controller.exception.OperationException;
 import edu.upb.chatupb_v2.model.entities.AceptarHello;
 import edu.upb.chatupb_v2.model.entities.AceptacionInvitacion;
 import edu.upb.chatupb_v2.model.entities.ConfirmacionLectura;
+import edu.upb.chatupb_v2.model.entities.EliminarMensaje;
 import edu.upb.chatupb_v2.model.entities.EnviarContacto;
 import edu.upb.chatupb_v2.model.entities.Invitacion;
 import edu.upb.chatupb_v2.model.entities.Hello;
@@ -31,10 +32,13 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class ChatUI extends JFrame implements ChatEventListener, IChatView {
+    private static final String TEXTO_MENSAJE_ELIMINADO = "Este mensaje fue eliminado";
     private static final String MI_ID = "af3bc20a-766c-43d4-813d-b1067a01fa9a";
     private final String miNombre = System.getProperty("user.name", "Alan");
     private ConnectionController connectionController;
@@ -42,6 +46,8 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     private MessageController messageController;
     private final DefaultListModel<Contact> contactModel = new DefaultListModel<>();
     private final Map<String, JLabel> indicadoresLectura = new HashMap<>();
+    private final Map<String, JLabel> mensajesPorId = new HashMap<>();
+    private final Set<String> mensajesEliminados = new HashSet<>();
 
     private String idContactoActual;
     private String nombreContactoActual = "Sin contacto";
@@ -662,6 +668,20 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     }
 
     @Override
+    public void onEliminarMensajeRecibido(EliminarMensaje eliminarMensaje, SocketClient sender) {
+        SwingUtilities.invokeLater(() -> {
+            if (messageController == null) {
+                return;
+            }
+            try {
+                messageController.recibirEliminacion(MI_ID, eliminarMensaje);
+            } catch (OperationException e) {
+                appendSistema(e.getMessage());
+            }
+        });
+    }
+
+    @Override
     public void onConfirmacionLecturaRecibida(ConfirmacionLectura confirmacion, SocketClient sender) {
         SwingUtilities.invokeLater(() -> {
             if (messageController != null) {
@@ -696,15 +716,27 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     }
 
     private void appendYo(String idMensaje, String texto) {
-        agregarBurbuja(idMensaje, texto, true);
+        agregarBurbuja(idMensaje, texto, true, false);
     }
 
     private void appendYo(String texto) {
-        agregarBurbuja(null, texto, true);
+        agregarBurbuja(null, texto, true, false);
     }
 
     private void appendContacto(String texto) {
-        agregarBurbuja(null, texto, false);
+        agregarBurbuja(null, texto, false, false);
+    }
+
+    private void appendContacto(String idMensaje, String texto) {
+        agregarBurbuja(idMensaje, texto, false, false);
+    }
+
+    private void appendYoEliminado(String idMensaje) {
+        agregarBurbuja(idMensaje, TEXTO_MENSAJE_ELIMINADO, true, true);
+    }
+
+    private void appendContactoEliminado(String idMensaje) {
+        agregarBurbuja(idMensaje, TEXTO_MENSAJE_ELIMINADO, false, true);
     }
 
     private void setEstado(String texto, Color color) {
@@ -743,13 +775,46 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     }
 
     @Override
+    public void mostrarMensajePropioEliminado(String idMensaje) {
+        SwingUtilities.invokeLater(() -> appendYoEliminado(idMensaje));
+    }
+
+    @Override
     public void mostrarMensajePropio(String mensaje) {
         SwingUtilities.invokeLater(() -> appendYo(mensaje));
     }
 
     @Override
+    public void mostrarMensajeContacto(String idMensaje, String mensaje) {
+        SwingUtilities.invokeLater(() -> appendContacto(idMensaje, mensaje));
+    }
+
+    @Override
+    public void mostrarMensajeContactoEliminado(String idMensaje) {
+        SwingUtilities.invokeLater(() -> appendContactoEliminado(idMensaje));
+    }
+
+    @Override
     public void mostrarMensajeContacto(String mensaje) {
         SwingUtilities.invokeLater(() -> appendContacto(mensaje));
+    }
+
+    @Override
+    public void marcarMensajeEliminado(String idMensaje) {
+        SwingUtilities.invokeLater(() -> {
+            if (idMensaje == null || idMensaje.isBlank()) {
+                return;
+            }
+            JLabel etiqueta = mensajesPorId.get(idMensaje);
+            if (etiqueta == null) {
+                return;
+            }
+            mensajesEliminados.add(idMensaje);
+            etiqueta.setText("<html><div style='width: 240px;'>" + TEXTO_MENSAJE_ELIMINADO + "</div></html>");
+            etiqueta.setForeground(new Color(150, 150, 150));
+            etiqueta.revalidate();
+            etiqueta.repaint();
+        });
     }
 
     @Override
@@ -771,6 +836,8 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     public void limpiarMensajes() {
         SwingUtilities.invokeLater(() -> {
             indicadoresLectura.clear();
+            mensajesPorId.clear();
+            mensajesEliminados.clear();
             messagesContainer.removeAll();
             messagesContainer.revalidate();
             messagesContainer.repaint();
@@ -782,7 +849,7 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         SwingUtilities.invokeLater(() -> txtMensaje.setText(""));
     }
 
-    private void agregarBurbuja(String idMensaje, String texto, boolean propia) {
+    private void agregarBurbuja(String idMensaje, String texto, boolean propia, boolean eliminado) {
         JPanel fila = new JPanel(new FlowLayout(propia ? FlowLayout.RIGHT : FlowLayout.LEFT, 0, 6));
         fila.setOpaque(false);
 
@@ -795,14 +862,20 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         );
         burbuja.setOpaque(true);
         burbuja.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        burbuja.setForeground(new Color(33, 33, 33));
+        burbuja.setForeground(eliminado ? new Color(150, 150, 150) : new Color(33, 33, 33));
         burbuja.setBackground(propia ? new Color(220, 248, 198) : new Color(242, 245, 247));
         burbuja.setBorder(new EmptyBorder(8, 12, 8, 12));
         burbuja.setAlignmentX(propia ? Component.RIGHT_ALIGNMENT : Component.LEFT_ALIGNMENT);
 
         contenido.add(burbuja);
+        if (idMensaje != null && !idMensaje.isBlank()) {
+            mensajesPorId.put(idMensaje, burbuja);
+            if (eliminado) {
+                mensajesEliminados.add(idMensaje);
+            }
+        }
 
-        if (propia && idMensaje != null && !idMensaje.isBlank()) {
+        if (propia && idMensaje != null && !idMensaje.isBlank() && !eliminado) {
             JLabel indicador = new JLabel(" ");
             indicador.setFont(new Font("Segoe UI", Font.PLAIN, 12));
             indicador.setForeground(new Color(18, 140, 126));
@@ -810,6 +883,28 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
             indicador.setAlignmentX(Component.RIGHT_ALIGNMENT);
             contenido.add(indicador);
             indicadoresLectura.put(idMensaje, indicador);
+
+            if (!eliminado) {
+                JPopupMenu popup = new JPopupMenu();
+                JMenuItem itemEliminar = new JMenuItem("Eliminar mensaje");
+                itemEliminar.addActionListener(e -> eliminarMensajePropio(idMensaje));
+                popup.add(itemEliminar);
+                burbuja.addMouseListener(new MouseAdapter() {
+                    @Override
+                    public void mousePressed(MouseEvent e) {
+                        if (e.isPopupTrigger()) {
+                            popup.show(e.getComponent(), e.getX(), e.getY());
+                        }
+                    }
+
+                    @Override
+                    public void mouseReleased(MouseEvent e) {
+                        if (e.isPopupTrigger()) {
+                            popup.show(e.getComponent(), e.getX(), e.getY());
+                        }
+                    }
+                });
+            }
         }
 
         fila.add(contenido);
@@ -820,6 +915,24 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         messagesContainer.revalidate();
         messagesContainer.repaint();
         desplazarChatAlFinal();
+    }
+
+    private void eliminarMensajePropio(String idMensaje) {
+        if (idMensaje == null || idMensaje.isBlank()) {
+            return;
+        }
+        if (mensajesEliminados.contains(idMensaje)) {
+            return;
+        }
+        if (messageController == null) {
+            appendSistema("Controlador de mensajes no configurado.");
+            return;
+        }
+        try {
+            messageController.eliminarMensaje(MI_ID, idContactoActual, idMensaje);
+        } catch (OperationException e) {
+            appendSistema(e.getMessage());
+        }
     }
 
     private void desplazarChatAlFinal() {

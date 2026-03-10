@@ -10,6 +10,7 @@ public class ChatMessageRecord {
     private String contactId;
     private String senderId;
     private String contenido;
+    private boolean eliminado;
     private Timestamp fechaHora;
 
     public ChatMessageRecord() {
@@ -27,6 +28,7 @@ public class ChatMessageRecord {
         this.contactId = contactId;
         this.senderId = senderId;
         this.contenido = contenido;
+        this.eliminado = false;
     }
 
     public long getId() {
@@ -75,6 +77,14 @@ public class ChatMessageRecord {
 
     public void setContenido(String contenido) {
         this.contenido = contenido;
+    }
+
+    public boolean isEliminado() {
+        return eliminado;
+    }
+
+    public void setEliminado(boolean eliminado) {
+        this.eliminado = eliminado;
     }
 
     public Timestamp getFechaHora() {
