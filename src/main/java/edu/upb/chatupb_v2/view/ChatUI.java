@@ -12,12 +12,12 @@ import edu.upb.chatupb_v2.model.entities.Hello;
 import edu.upb.chatupb_v2.model.entities.MensajeChat;
 import edu.upb.chatupb_v2.model.entities.RechazarHello;
 import edu.upb.chatupb_v2.model.entities.RechazoConexion;
+import edu.upb.chatupb_v2.model.entities.Contact;
 import edu.upb.chatupb_v2.model.network.ChatEventListener;
 import edu.upb.chatupb_v2.model.network.SocketClient;
 import edu.upb.chatupb_v2.controller.ContactController;
 import edu.upb.chatupb_v2.controller.MessageController;
 import edu.upb.chatupb_v2.model.repository.BlackListDao;
-import edu.upb.chatupb_v2.model.entities.Contact;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -39,7 +39,16 @@ import java.util.Set;
 
 public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     private static final String TEXTO_MENSAJE_ELIMINADO = "Este mensaje fue eliminado";
+    private static final int MAX_CHARS_CONTINUOS_BURBUJA = 28;
     private static final String MI_ID = "af3bc20a-766c-43d4-813d-b1067a01fa9a";
+    private static final Color COLOR_APP_GREEN = new Color(45, 112, 82);
+    private static final Color COLOR_BG = new Color(235, 238, 236);
+    private static final Color COLOR_PANEL = new Color(244, 246, 245);
+    private static final Color COLOR_CHAT_BG = new Color(233, 237, 233);
+    private static final Color COLOR_OWN_BUBBLE = new Color(43, 112, 81);
+    private static final Color COLOR_OTHER_BUBBLE = Color.WHITE;
+    private static final Color COLOR_TEXT_PRIMARY = new Color(34, 44, 39);
+    private static final Color COLOR_TEXT_MUTED = new Color(122, 132, 126);
     private final String miNombre = System.getProperty("user.name", "Alan");
     private ConnectionController connectionController;
     private ContactController contactController;
@@ -56,6 +65,8 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     private JButton btnConectar;
     private JLabel lblEstado;
     private JLabel lblContacto;
+    private JLabel lblUsuarioLocal;
+    private JLabel lblUsuarioIp;
     private JPanel messagesContainer;
     private JScrollPane scrollChat;
     private JTextField txtMensaje;
@@ -96,67 +107,103 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     }
 
     private void initUI() {
-        setTitle("Chat UPB - P2P");
+        setTitle("ChatUPB - P2P");
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-        setMinimumSize(new Dimension(680, 500));
+        setMinimumSize(new Dimension(900, 600));
         setLocationRelativeTo(null);
 
-        JPanel root = new JPanel(new BorderLayout(8, 8));
-        root.setBorder(new EmptyBorder(12, 12, 12, 12));
-        root.setBackground(new Color(236, 240, 237));
+        JPanel root = new JPanel(new BorderLayout());
+        root.setBackground(COLOR_BG);
         setContentPane(root);
 
-        JPanel top = new JPanel(new BorderLayout(8, 8));
-        top.setBorder(new EmptyBorder(8, 10, 8, 10));
-        top.setBackground(new Color(18, 140, 126));
+        JPanel top = new JPanel(new BorderLayout());
+        top.setBorder(new EmptyBorder(10, 16, 10, 16));
+        top.setBackground(COLOR_APP_GREEN);
+
+        JPanel brandPanel = new JPanel();
+        brandPanel.setOpaque(false);
+        brandPanel.setLayout(new BoxLayout(brandPanel, BoxLayout.Y_AXIS));
 
         JLabel titulo = new JLabel("ChatUPB");
         titulo.setForeground(Color.WHITE);
-        titulo.setFont(new Font("Segoe UI", Font.BOLD, 16));
+        titulo.setFont(new Font("Segoe UI", Font.BOLD, 30));
 
-        JPanel topRight = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        JLabel subtitulo = new JLabel("P2P MESSENGER");
+        subtitulo.setForeground(new Color(178, 220, 201));
+        subtitulo.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+
+        brandPanel.add(titulo);
+        brandPanel.add(subtitulo);
+
+        JPanel topRight = new JPanel();
         topRight.setOpaque(false);
-        lblContacto = new JLabel("Contacto: " + nombreContactoActual);
-        lblContacto.setForeground(Color.WHITE);
-        lblEstado = new JLabel("Estado: Sin conexion");
-        lblEstado.setForeground(new Color(255, 230, 153));
-        topRight.add(lblContacto);
-        topRight.add(lblEstado);
+        topRight.setLayout(new BoxLayout(topRight, BoxLayout.Y_AXIS));
 
-        top.add(titulo, BorderLayout.WEST);
+        lblUsuarioLocal = new JLabel(miNombre);
+        lblUsuarioLocal.setForeground(Color.WHITE);
+        lblUsuarioLocal.setFont(new Font("Segoe UI", Font.BOLD, 18));
+        lblUsuarioLocal.setAlignmentX(Component.RIGHT_ALIGNMENT);
+
+        lblUsuarioIp = new JLabel("ID: " + MI_ID.substring(0, 8) + "...");
+        lblUsuarioIp.setForeground(new Color(185, 220, 204));
+        lblUsuarioIp.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblUsuarioIp.setAlignmentX(Component.RIGHT_ALIGNMENT);
+
+        topRight.add(lblUsuarioLocal);
+        topRight.add(lblUsuarioIp);
+
+        top.add(brandPanel, BorderLayout.WEST);
         top.add(topRight, BorderLayout.EAST);
-//
-        JPanel panelContactos = new JPanel(new BorderLayout(6, 6));
-        panelContactos.setBorder(BorderFactory.createTitledBorder("Contactos"));
-        panelContactos.setBackground(Color.WHITE);
+
+        JPanel panelContactos = new JPanel(new BorderLayout());
+        panelContactos.setBackground(COLOR_PANEL);
+        panelContactos.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, new Color(214, 219, 216)));
+
+        JLabel lblContactos = new JLabel("CONTACTOS");
+        lblContactos.setForeground(new Color(126, 137, 131));
+        lblContactos.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        lblContactos.setBorder(new EmptyBorder(12, 14, 8, 14));
 
         listContactos = new JList<>(contactModel);
         listContactos.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         listContactos.setCellRenderer(new ContactCellRenderer());
+        listContactos.setBackground(COLOR_PANEL);
+        listContactos.setBorder(new EmptyBorder(6, 8, 6, 8));
         listContactos.addListSelectionListener(e -> {
             if (!e.getValueIsAdjusting()) {
                 onContactoSeleccionado();
             }
         });
-        panelContactos.add(new JScrollPane(listContactos), BorderLayout.CENTER);
+        JScrollPane scrollContactos = new JScrollPane(listContactos);
+        scrollContactos.setBorder(BorderFactory.createEmptyBorder());
+        scrollContactos.getViewport().setBackground(COLOR_PANEL);
 
-        JPanel panelChat = new JPanel(new BorderLayout(0, 0));
-        panelChat.setBackground(Color.WHITE);
-        panelChat.setBorder(BorderFactory.createLineBorder(new Color(210, 210, 210)));
-
-        JPanel connectBar = new JPanel(new BorderLayout(8, 0));
-        connectBar.setBackground(new Color(245, 247, 246));
-        connectBar.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(210, 210, 210)),
-                new EmptyBorder(8, 8, 8, 8)
+        JPanel panelConexionP2P = new JPanel();
+        panelConexionP2P.setLayout(new BoxLayout(panelConexionP2P, BoxLayout.Y_AXIS));
+        panelConexionP2P.setBackground(new Color(240, 243, 241));
+        panelConexionP2P.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(215, 220, 217)),
+                new EmptyBorder(12, 14, 12, 14)
         ));
 
-        JPanel leftControls = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
-        leftControls.setOpaque(false);
-        leftControls.add(new JLabel("IP destino:"));
+        JLabel lblConexion = new JLabel("CONEXION P2P");
+        lblConexion.setForeground(new Color(131, 141, 136));
+        lblConexion.setFont(new Font("Segoe UI", Font.BOLD, 12));
+
+        JLabel lblIp = new JLabel("IP destino");
+        lblIp.setForeground(new Color(114, 123, 118));
+        lblIp.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        lblIp.setBorder(new EmptyBorder(10, 0, 4, 0));
+
         txtIp = new JTextField("127.0.0.1", 16);
-        leftControls.add(txtIp);
+        txtIp.setMaximumSize(new Dimension(Integer.MAX_VALUE, 34));
+        styleTextField(txtIp);
+
+        JPanel accionesP2P = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 8));
+        accionesP2P.setOpaque(false);
+
         btnConectar = new JButton("Conectar");
+        stylePrimaryButton(btnConectar);
         btnConectar.addActionListener(e -> conectar());
         btnConectar.addMouseListener(new MouseAdapter() {
             @Override
@@ -166,54 +213,132 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
                 }
             }
         });
-        leftControls.add(btnConectar);
 
-        JPanel rightControls = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        rightControls.setOpaque(false);
         btnOffline = new JButton("Offline");
+        styleDangerButton(btnOffline);
         btnOffline.addActionListener(e -> ponermeOffline());
-        rightControls.add(btnOffline);
 
-        connectBar.add(leftControls, BorderLayout.WEST);
-        connectBar.add(rightControls, BorderLayout.EAST);
+        accionesP2P.add(btnConectar);
+        accionesP2P.add(btnOffline);
 
-        messagesContainer = new JPanel();
+        panelConexionP2P.add(lblConexion);
+        panelConexionP2P.add(lblIp);
+        panelConexionP2P.add(txtIp);
+        panelConexionP2P.add(accionesP2P);
+
+        panelContactos.add(lblContactos, BorderLayout.NORTH);
+        panelContactos.add(scrollContactos, BorderLayout.CENTER);
+        panelContactos.add(panelConexionP2P, BorderLayout.SOUTH);
+
+        JPanel panelChat = new JPanel(new BorderLayout());
+        panelChat.setBackground(COLOR_CHAT_BG);
+
+        JPanel chatHeader = new JPanel();
+        chatHeader.setLayout(new BoxLayout(chatHeader, BoxLayout.Y_AXIS));
+        chatHeader.setBackground(Color.WHITE);
+        chatHeader.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(220, 225, 222)),
+                new EmptyBorder(12, 18, 10, 18)
+        ));
+
+        lblContacto = new JLabel(nombreContactoActual);
+        lblContacto.setFont(new Font("Segoe UI", Font.BOLD, 28));
+        lblContacto.setForeground(COLOR_TEXT_PRIMARY);
+
+        lblEstado = new JLabel("Sin conexion");
+        lblEstado.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        lblEstado.setForeground(new Color(170, 123, 71));
+
+        chatHeader.add(lblContacto);
+        chatHeader.add(lblEstado);
+
+        messagesContainer = new DotPatternPanel();
         messagesContainer.setLayout(new BoxLayout(messagesContainer, BoxLayout.Y_AXIS));
-        messagesContainer.setBackground(Color.WHITE);
-        messagesContainer.setBorder(new EmptyBorder(10, 10, 10, 10));
+        messagesContainer.setBackground(COLOR_CHAT_BG);
+        messagesContainer.setBorder(new EmptyBorder(14, 18, 14, 18));
 
         scrollChat = new JScrollPane(messagesContainer);
         scrollChat.setBorder(BorderFactory.createEmptyBorder());
-        scrollChat.getViewport().setBackground(Color.WHITE);
+        scrollChat.getViewport().setBackground(COLOR_CHAT_BG);
+        scrollChat.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
+        scrollChat.setVerticalScrollBarPolicy(ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED);
 
-        panelChat.add(connectBar, BorderLayout.NORTH);
+        panelChat.add(chatHeader, BorderLayout.NORTH);
         panelChat.add(scrollChat, BorderLayout.CENTER);
 
-        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, panelContactos, panelChat);
-        splitPane.setDividerLocation(240);
-        splitPane.setResizeWeight(0.20);
-
-        JPanel bottom = new JPanel(new BorderLayout(8, 0));
-        bottom.setBackground(new Color(245, 247, 246));
-        bottom.setBorder(new EmptyBorder(6, 0, 0, 0));
+        JPanel composer = new JPanel(new BorderLayout(8, 0));
+        composer.setBackground(new Color(248, 249, 248));
+        composer.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(1, 0, 0, 0, new Color(218, 223, 220)),
+                new EmptyBorder(10, 14, 10, 14)
+        ));
         txtMensaje = new JTextField();
+        styleTextField(txtMensaje);
+
         btnEnviarContacto = new JButton("Enviar contacto");
+        styleSecondaryButton(btnEnviarContacto);
         btnEnviarContacto.addActionListener(e -> enviarContactoAAmigo());
+
         btnEnviar = new JButton("Enviar");
+        stylePrimaryButton(btnEnviar);
         btnEnviar.addActionListener(e -> enviarMensajeChat());
+
         JPanel accionesMensaje = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         accionesMensaje.setOpaque(false);
         accionesMensaje.add(btnEnviarContacto);
         accionesMensaje.add(btnEnviar);
-        bottom.add(txtMensaje, BorderLayout.CENTER);
-        bottom.add(accionesMensaje, BorderLayout.EAST);
+
+        composer.add(txtMensaje, BorderLayout.CENTER);
+        composer.add(accionesMensaje, BorderLayout.EAST);
+        panelChat.add(composer, BorderLayout.SOUTH);
+
+        JSplitPane splitPane = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, panelContactos, panelChat);
+        splitPane.setDividerLocation(300);
+        splitPane.setResizeWeight(0.24);
+        splitPane.setBorder(BorderFactory.createEmptyBorder());
 
         root.add(top, BorderLayout.NORTH);
         root.add(splitPane, BorderLayout.CENTER);
-        root.add(bottom, BorderLayout.SOUTH);
 
         appendSistema("Tu id: " + MI_ID);
-        setSize(980, 620);
+        setSize(1280, 800);
+    }
+
+    private void styleTextField(JTextField field) {
+        field.setFont(new Font("Segoe UI", Font.PLAIN, 15));
+        field.setForeground(COLOR_TEXT_PRIMARY);
+        field.setBackground(Color.WHITE);
+        field.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(206, 214, 210)),
+                new EmptyBorder(8, 10, 8, 10)
+        ));
+    }
+
+    private void stylePrimaryButton(JButton button) {
+        button.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        button.setBackground(COLOR_APP_GREEN);
+        button.setForeground(Color.WHITE);
+        button.setBorder(BorderFactory.createEmptyBorder(9, 14, 9, 14));
+        button.setFocusPainted(false);
+        button.setOpaque(true);
+    }
+
+    private void styleSecondaryButton(JButton button) {
+        button.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        button.setBackground(new Color(221, 235, 228));
+        button.setForeground(new Color(40, 101, 74));
+        button.setBorder(BorderFactory.createEmptyBorder(9, 14, 9, 14));
+        button.setFocusPainted(false);
+        button.setOpaque(true);
+    }
+
+    private void styleDangerButton(JButton button) {
+        button.setFont(new Font("Segoe UI", Font.BOLD, 14));
+        button.setBackground(new Color(255, 239, 240));
+        button.setForeground(new Color(200, 74, 74));
+        button.setBorder(BorderFactory.createEmptyBorder(9, 14, 9, 14));
+        button.setFocusPainted(false);
+        button.setOpaque(true);
     }
 
     private void ponermeOffline() {
@@ -740,12 +865,23 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     }
 
     private void setEstado(String texto, Color color) {
-        lblEstado.setText("Estado: " + texto);
-        lblEstado.setForeground(color);
+        Color finalColor = COLOR_TEXT_MUTED;
+        if (texto != null) {
+            String t = texto.toLowerCase();
+            if (t.contains("conectado")) {
+                finalColor = new Color(42, 119, 86);
+            } else if (t.contains("esperando")) {
+                finalColor = new Color(166, 115, 58);
+            } else if (t.contains("rechazado")) {
+                finalColor = new Color(177, 72, 72);
+            }
+        }
+        lblEstado.setText("• " + texto);
+        lblEstado.setForeground(finalColor);
     }
 
     private void setContacto(String nombre) {
-        lblContacto.setText("Contacto: " + nombre);
+        lblContacto.setText(nombre == null || nombre.isBlank() ? "Sin contacto" : nombre);
     }
 
     @Override
@@ -850,21 +986,25 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     }
 
     private void agregarBurbuja(String idMensaje, String texto, boolean propia, boolean eliminado) {
-        JPanel fila = new JPanel(new FlowLayout(propia ? FlowLayout.RIGHT : FlowLayout.LEFT, 0, 6));
+        JPanel fila = new JPanel(new FlowLayout(propia ? FlowLayout.RIGHT : FlowLayout.LEFT, 0, 8));
         fila.setOpaque(false);
 
         JPanel contenido = new JPanel();
         contenido.setLayout(new BoxLayout(contenido, BoxLayout.Y_AXIS));
         contenido.setOpaque(false);
 
+        String textoAdaptado = escaparHtml(insertarCortesSuaves(texto));
         JLabel burbuja = new JLabel(
-                "<html><div style='width: 240px;'>" + escaparHtml(texto) + "</div></html>"
+                "<html><div style='width: 420px;'>" + textoAdaptado + "</div></html>"
         );
         burbuja.setOpaque(true);
-        burbuja.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        burbuja.setForeground(eliminado ? new Color(150, 150, 150) : new Color(33, 33, 33));
-        burbuja.setBackground(propia ? new Color(220, 248, 198) : new Color(242, 245, 247));
-        burbuja.setBorder(new EmptyBorder(8, 12, 8, 12));
+        burbuja.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+        burbuja.setForeground(eliminado ? new Color(156, 162, 160) : (propia ? Color.WHITE : COLOR_TEXT_PRIMARY));
+        burbuja.setBackground(eliminado ? new Color(246, 247, 246) : (propia ? COLOR_OWN_BUBBLE : COLOR_OTHER_BUBBLE));
+        burbuja.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(213, 220, 217)),
+                new EmptyBorder(10, 14, 10, 14)
+        ));
         burbuja.setAlignmentX(propia ? Component.RIGHT_ALIGNMENT : Component.LEFT_ALIGNMENT);
 
         contenido.add(burbuja);
@@ -877,8 +1017,8 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
 
         if (propia && idMensaje != null && !idMensaje.isBlank() && !eliminado) {
             JLabel indicador = new JLabel(" ");
-            indicador.setFont(new Font("Segoe UI", Font.PLAIN, 12));
-            indicador.setForeground(new Color(18, 140, 126));
+            indicador.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            indicador.setForeground(new Color(170, 222, 195));
             indicador.setBorder(new EmptyBorder(2, 4, 0, 4));
             indicador.setAlignmentX(Component.RIGHT_ALIGNMENT);
             contenido.add(indicador);
@@ -954,22 +1094,108 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
                 .replace("\n", "<br>");
     }
 
-    private static class ContactCellRenderer extends DefaultListCellRenderer {
+    private String insertarCortesSuaves(String texto) {
+        if (texto == null || texto.isEmpty()) {
+            return "";
+        }
+
+        StringBuilder out = new StringBuilder(texto.length() + 32);
+        int consecutivos = 0;
+
+        for (int i = 0; i < texto.length(); i++) {
+            char c = texto.charAt(i);
+            out.append(c);
+
+            if (Character.isWhitespace(c)) {
+                consecutivos = 0;
+                continue;
+            }
+
+            consecutivos++;
+            if (consecutivos >= MAX_CHARS_CONTINUOS_BURBUJA) {
+                // Salto real para evitar overflow horizontal si la palabra no tiene espacios
+                out.append('\n');
+                consecutivos = 0;
+            }
+        }
+
+        return out.toString();
+    }
+
+    private static class DotPatternPanel extends JPanel {
         @Override
-        public java.awt.Component getListCellRendererComponent(
-                JList<?> list,
-                Object value,
+        protected void paintComponent(java.awt.Graphics g) {
+            super.paintComponent(g);
+            g.setColor(new Color(220, 225, 222));
+            int step = 18;
+            for (int y = 8; y < getHeight(); y += step) {
+                for (int x = 8; x < getWidth(); x += step) {
+                    g.fillRect(x, y, 1, 1);
+                }
+            }
+        }
+    }
+
+    private static class ContactCellRenderer extends JPanel implements ListCellRenderer<Contact> {
+        private final JLabel lblChip = new JLabel();
+        private final JLabel lblNombre = new JLabel();
+        private final JLabel lblSub = new JLabel();
+
+        ContactCellRenderer() {
+            setLayout(new BorderLayout(8, 2));
+            setBorder(new EmptyBorder(8, 10, 8, 10));
+            setOpaque(true);
+
+            lblChip.setOpaque(true);
+            lblChip.setHorizontalAlignment(SwingConstants.CENTER);
+            lblChip.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            lblChip.setPreferredSize(new Dimension(36, 24));
+            lblChip.setBorder(BorderFactory.createLineBorder(new Color(170, 185, 178)));
+
+            JPanel textPanel = new JPanel();
+            textPanel.setLayout(new BoxLayout(textPanel, BoxLayout.Y_AXIS));
+            textPanel.setOpaque(false);
+            lblNombre.setFont(new Font("Segoe UI", Font.BOLD, 16));
+            lblNombre.setForeground(COLOR_TEXT_PRIMARY);
+            lblSub.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+            lblSub.setForeground(COLOR_TEXT_MUTED);
+            textPanel.add(lblNombre);
+            textPanel.add(lblSub);
+
+            add(lblChip, BorderLayout.WEST);
+            add(textPanel, BorderLayout.CENTER);
+        }
+
+        @Override
+        public Component getListCellRendererComponent(
+                JList<? extends Contact> list,
+                Contact value,
                 int index,
                 boolean isSelected,
                 boolean cellHasFocus
         ) {
-            JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
-            if (value instanceof Contact) {
-                Contact c = (Contact) value;
-                String estado = c.isStateConnect() ? "[ON]" : "[OFF]";
-                label.setText(estado + " " + c.getName());
+            if (value == null) {
+                lblChip.setText("");
+                lblNombre.setText("");
+                lblSub.setText("");
+                return this;
             }
-            return label;
+
+            boolean on = value.isStateConnect();
+            lblChip.setText(on ? "On" : "Off");
+            lblChip.setBackground(on ? new Color(188, 225, 203) : new Color(234, 236, 235));
+            lblChip.setForeground(on ? new Color(39, 101, 74) : new Color(122, 132, 126));
+
+            lblNombre.setText(value.getName());
+            String sub = (value.getIp() == null || value.getIp().isBlank()) ? "Sin IP registrada" : value.getIp();
+            lblSub.setText(sub);
+
+            if (isSelected) {
+                setBackground(new Color(216, 230, 222));
+            } else {
+                setBackground(COLOR_PANEL);
+            }
+            return this;
         }
     }
 }

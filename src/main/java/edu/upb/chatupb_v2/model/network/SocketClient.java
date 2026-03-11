@@ -34,6 +34,8 @@ public class SocketClient extends Thread {
     private final BufferedReader br;
     private String remoteClientId;
     private ChatEventListener listener;
+    private volatile boolean closedByLocal = false;
+    private volatile boolean remoteOfflineAnnounced = false;
 
     public SocketClient(Socket socket) throws IOException {
         this.socket = socket;
@@ -118,6 +120,9 @@ public class SocketClient extends Thread {
                     }
                     case "007": {
                         MensajeChat mensajeChat = MensajeChat.parse(message);
+                        if (this.remoteClientId == null || this.remoteClientId.isBlank()) {
+                            this.remoteClientId = mensajeChat.getIdUser();
+                        }
                         if (listener != null) {
                             listener.onMensajeRecibido(mensajeChat, this);
                         }
@@ -147,6 +152,10 @@ public class SocketClient extends Thread {
                     case "0018": {
                         Offline offline = Offline.parse(message);
                         String idUsuario = offline.getIdUsuario();
+                        if (this.remoteClientId == null || this.remoteClientId.isBlank()) {
+                            this.remoteClientId = idUsuario;
+                        }
+                        remoteOfflineAnnounced = true;
                         if (listener != null) {
                             listener.onClienteOffline(idUsuario, this);
                         }
@@ -160,6 +169,9 @@ public class SocketClient extends Thread {
         } finally {
             if (remoteClientId != null) {
                 ClientMediator.getInstance().removerCliente(remoteClientId);
+            }
+            if (!closedByLocal && !remoteOfflineAnnounced && remoteClientId != null && listener != null) {
+                listener.onClienteOffline(remoteClientId, this);
             }
         }
     }
@@ -178,6 +190,7 @@ public class SocketClient extends Thread {
 
     public void close() {
         try {
+            closedByLocal = true;
             if (remoteClientId != null) {
                 ClientMediator.getInstance().removerCliente(remoteClientId);
             }
