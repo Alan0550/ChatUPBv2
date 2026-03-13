@@ -4,11 +4,15 @@ import edu.upb.chatupb_v2.controller.exception.OperationException;
 import edu.upb.chatupb_v2.model.entities.ChatMessageRecord;
 import edu.upb.chatupb_v2.model.entities.ConfirmacionLectura;
 import edu.upb.chatupb_v2.model.entities.EliminarMensaje;
+import edu.upb.chatupb_v2.model.entities.ImagenChat;
 import edu.upb.chatupb_v2.model.entities.MensajeChat;
 import edu.upb.chatupb_v2.model.network.ClientMediator;
 import edu.upb.chatupb_v2.model.repository.MessageDao;
 import edu.upb.chatupb_v2.view.IChatView;
 
+import java.io.File;
+import java.nio.file.Files;
+import java.util.Base64;
 import java.util.List;
 import java.util.UUID;
 
@@ -59,6 +63,47 @@ public class MessageController {
         confirmarLectura(mensaje);
     }
 
+    public void enviarImagen(String miId, String idContactoActual, File archivoImagen) {
+        if (archivoImagen == null) {
+            return;
+        }
+        if (idContactoActual == null || idContactoActual.isBlank()) {
+            throw new OperationException("Selecciona un contacto para enviar.");
+        }
+
+        try {
+            byte[] bytes = Files.readAllBytes(archivoImagen.toPath());
+            if (bytes.length == 0) {
+                throw new OperationException("La imagen esta vacia.");
+            }
+            if (bytes.length > 1024 * 1024) {
+                throw new OperationException("La imagen supera el limite de 1 MB.");
+            }
+
+            String base64 = Base64.getEncoder().encodeToString(bytes);
+            ImagenChat imagenChat = new ImagenChat(miId, UUID.randomUUID().toString(), base64);
+            boolean enviado = ClientMediator.getInstance().enviarMensaje(idContactoActual, imagenChat.generarTrama());
+            if (!enviado) {
+                throw new OperationException("No hay conexion activa.");
+            }
+
+            chatView.mostrarImagenPropia(imagenChat.getIdMensaje(), base64);
+        } catch (Exception e) {
+            if (e instanceof OperationException) {
+                throw (OperationException) e;
+            }
+            throw new OperationException("No se pudo enviar imagen.", e);
+        }
+    }
+
+    public void recibirImagen(ImagenChat imagen) {
+        if (imagen == null) {
+            return;
+        }
+        chatView.mostrarImagenContacto(imagen.getIdMensaje(), imagen.getImagenBase64());
+        confirmarLectura(imagen.getIdUser(), imagen.getIdMensaje());
+    }
+
     public void confirmarLecturaRecibida(ConfirmacionLectura confirmacion) {
         if (confirmacion == null) {
             return;
@@ -67,6 +112,21 @@ public class MessageController {
             return;
         }
         chatView.marcarMensajeLeido(confirmacion.getIdMensaje());
+    }
+
+    public void confirmarLectura(String idContacto, String idMensaje) {
+        if (idContacto == null || idContacto.isBlank()) {
+            return;
+        }
+        if (idMensaje == null || idMensaje.isBlank()) {
+            return;
+        }
+        try {
+            ConfirmacionLectura confirmacion = new ConfirmacionLectura(idMensaje);
+            ClientMediator.getInstance().enviarMensaje(idContacto, confirmacion.generarTrama());
+        } catch (Exception e) {
+            throw new OperationException("No se pudo confirmar lectura.", e);
+        }
     }
 
     public void cargarHistorial(String miId, String idContactoActual) {
@@ -81,12 +141,22 @@ public class MessageController {
                 if (miId.equals(mensaje.getSenderId())) {
                     if (mensaje.isEliminado()) {
                         chatView.mostrarMensajePropioEliminado(mensaje.getMessageId());
+                    } else if (ImagenChat.isStoredContent(mensaje.getContenido())) {
+                        chatView.mostrarImagenPropia(
+                                mensaje.getMessageId(),
+                                ImagenChat.extractBase64(mensaje.getContenido())
+                        );
                     } else {
                         chatView.mostrarMensajePropio(mensaje.getMessageId(), mensaje.getContenido());
                     }
                 } else {
                     if (mensaje.isEliminado()) {
                         chatView.mostrarMensajeContactoEliminado(mensaje.getMessageId());
+                    } else if (ImagenChat.isStoredContent(mensaje.getContenido())) {
+                        chatView.mostrarImagenContacto(
+                                mensaje.getMessageId(),
+                                ImagenChat.extractBase64(mensaje.getContenido())
+                        );
                     } else {
                         chatView.mostrarMensajeContacto(mensaje.getMessageId(), mensaje.getContenido());
                     }

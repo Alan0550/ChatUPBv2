@@ -9,9 +9,11 @@ public interface IChatView {
     void mostrarMensajeSistema(String mensaje);
     void refrescarContacto(Contact contacto);
     void mostrarMensajePropio(String idMensaje, String mensaje);
+    void mostrarImagenPropia(String idMensaje, String imagenBase64);
     void mostrarMensajePropioEliminado(String idMensaje);
     void mostrarMensajePropio(String mensaje);
     void mostrarMensajeContacto(String idMensaje, String mensaje);
+    void mostrarImagenContacto(String idMensaje, String imagenBase64);
     void mostrarMensajeContactoEliminado(String idMensaje);
     void mostrarMensajeContacto(String mensaje);
     void marcarMensajeEliminado(String idMensaje);

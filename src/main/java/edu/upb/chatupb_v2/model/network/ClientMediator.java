@@ -8,10 +8,13 @@ import edu.upb.chatupb_v2.model.entities.Contact;
 import edu.upb.chatupb_v2.model.entities.EliminarMensaje;
 import edu.upb.chatupb_v2.model.entities.EnviarContacto;
 import edu.upb.chatupb_v2.model.entities.Hello;
+import edu.upb.chatupb_v2.model.entities.ImagenChat;
 import edu.upb.chatupb_v2.model.entities.Invitacion;
+import edu.upb.chatupb_v2.model.entities.Message;
 import edu.upb.chatupb_v2.model.entities.MensajeChat;
 import edu.upb.chatupb_v2.model.entities.RechazarHello;
 import edu.upb.chatupb_v2.model.entities.RechazoConexion;
+import edu.upb.chatupb_v2.model.repository.DaoHelper;
 import edu.upb.chatupb_v2.model.repository.MessageDao;
 
 import java.util.HashMap;
@@ -22,11 +25,13 @@ public class ClientMediator implements ChatEventListener {
     private static final ClientMediator instance = new ClientMediator();
     private final HashMap<String, SocketClient> clientes;
     private final MessageDao messageDao;
+    private final DaoHelper<Object> daoHelper;
     private ChatEventListener uiListener;
 
     private ClientMediator() {
         this.clientes = new HashMap<>();
         this.messageDao = new MessageDao();
+        this.daoHelper = new DaoHelper<>();
     }
 
     public static ClientMediator getInstance() {
@@ -69,6 +74,13 @@ public class ClientMediator implements ChatEventListener {
         return new HashMap<>(clientes);
     }
 
+    public synchronized void ejecutar(Message message, SocketClient sender) {
+        if (message == null) {
+            return;
+        }
+        message.execute(this, sender, daoHelper);
+    }
+
     public synchronized void notificarInvitacion(Invitacion invitacion, SocketClient sender) {
         onInvitacionRecibida(invitacion, sender);
     }
@@ -95,6 +107,10 @@ public class ClientMediator implements ChatEventListener {
 
     public synchronized void notificarMensaje(MensajeChat mensaje, SocketClient sender) {
         onMensajeRecibido(mensaje, sender);
+    }
+
+    public synchronized void notificarImagen(ImagenChat imagen, SocketClient sender) {
+        onImagenRecibida(imagen, sender);
     }
 
     public synchronized void notificarEliminarMensaje(EliminarMensaje eliminarMensaje, SocketClient sender) {
@@ -179,6 +195,17 @@ public class ClientMediator implements ChatEventListener {
     }
 
     @Override
+    public synchronized void onImagenRecibida(ImagenChat imagen, SocketClient sender) {
+        if (imagen != null && imagen.getIdUser() != null) {
+            agregarCliente(imagen.getIdUser(), sender);
+            guardarImagenRecibida(imagen);
+        }
+        if (uiListener != null) {
+            uiListener.onImagenRecibida(imagen, sender);
+        }
+    }
+
+    @Override
     public synchronized void onEliminarMensajeRecibido(EliminarMensaje eliminarMensaje, SocketClient sender) {
         if (uiListener != null) {
             uiListener.onEliminarMensajeRecibido(eliminarMensaje, sender);
@@ -212,16 +239,27 @@ public class ClientMediator implements ChatEventListener {
 
     private void guardarMensajeEnviado(String idCliente, String trama) {
         try {
-            MensajeChat msg = MensajeChat.parse(trama.trim());
-            String contenido = limpiarFinalLinea(msg.getMensaje());
-            ChatMessageRecord record = new ChatMessageRecord(
-                    msg.getIdMensaje(),
-                    Contact.ME_CODE,
-                    idCliente,
-                    Contact.ME_CODE,
-                    contenido
-            );
-            messageDao.save(record);
+            Message parsed = Message.parseMessage(trama.trim());
+            if (parsed instanceof MensajeChat msg) {
+                String contenido = limpiarFinalLinea(msg.getMensaje());
+                ChatMessageRecord record = new ChatMessageRecord(
+                        msg.getIdMensaje(),
+                        Contact.ME_CODE,
+                        idCliente,
+                        Contact.ME_CODE,
+                        contenido
+                );
+                messageDao.save(record);
+            } else if (parsed instanceof ImagenChat imagen) {
+                ChatMessageRecord record = new ChatMessageRecord(
+                        imagen.getIdMensaje(),
+                        Contact.ME_CODE,
+                        idCliente,
+                        Contact.ME_CODE,
+                        imagen.toStoredContent()
+                );
+                messageDao.save(record);
+            }
         } catch (Exception ignored) {
         }
     }
@@ -235,6 +273,20 @@ public class ClientMediator implements ChatEventListener {
                     msg.getIdUser(),
                     msg.getIdUser(),
                     contenido
+            );
+            messageDao.save(record);
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void guardarImagenRecibida(ImagenChat imagen) {
+        try {
+            ChatMessageRecord record = new ChatMessageRecord(
+                    imagen.getIdMensaje(),
+                    Contact.ME_CODE,
+                    imagen.getIdUser(),
+                    imagen.getIdUser(),
+                    imagen.toStoredContent()
             );
             messageDao.save(record);
         } catch (Exception ignored) {

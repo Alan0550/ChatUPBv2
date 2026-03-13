@@ -2,25 +2,18 @@ package edu.upb.chatupb_v2.view;
 
 import edu.upb.chatupb_v2.controller.ConnectionController;
 import edu.upb.chatupb_v2.controller.exception.OperationException;
-import edu.upb.chatupb_v2.model.entities.AceptarHello;
-import edu.upb.chatupb_v2.model.entities.AceptacionInvitacion;
+import edu.upb.chatupb_v2.controller.ContactController;
+import edu.upb.chatupb_v2.controller.MessageController;
 import edu.upb.chatupb_v2.model.entities.ConfirmacionLectura;
 import edu.upb.chatupb_v2.model.entities.EliminarMensaje;
 import edu.upb.chatupb_v2.model.entities.EnviarContacto;
-import edu.upb.chatupb_v2.model.entities.Invitacion;
-import edu.upb.chatupb_v2.model.entities.Hello;
+import edu.upb.chatupb_v2.model.entities.ImagenChat;
 import edu.upb.chatupb_v2.model.entities.MensajeChat;
-import edu.upb.chatupb_v2.model.entities.RechazarHello;
-import edu.upb.chatupb_v2.model.entities.RechazoConexion;
 import edu.upb.chatupb_v2.model.entities.Contact;
-import edu.upb.chatupb_v2.model.network.ChatEventListener;
-import edu.upb.chatupb_v2.model.network.SocketClient;
-import edu.upb.chatupb_v2.controller.ContactController;
-import edu.upb.chatupb_v2.controller.MessageController;
-import edu.upb.chatupb_v2.model.repository.BlackListDao;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -28,8 +21,11 @@ import java.awt.Dimension;
 import java.awt.EventQueue;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Image;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.File;
+import java.util.Base64;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -37,9 +33,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-public class ChatUI extends JFrame implements ChatEventListener, IChatView {
+public class ChatUI extends JFrame implements IChatView {
     private static final String TEXTO_MENSAJE_ELIMINADO = "Este mensaje fue eliminado";
     private static final int MAX_CHARS_CONTINUOS_BURBUJA = 28;
+    private static final int MAX_IMAGE_BUBBLE_SIZE = 260;
     private static final String MI_ID = "af3bc20a-766c-43d4-813d-b1067a01fa9a";
     private static final Color COLOR_APP_GREEN = new Color(45, 112, 82);
     private static final Color COLOR_BG = new Color(235, 238, 236);
@@ -57,6 +54,8 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     private final Map<String, JLabel> indicadoresLectura = new HashMap<>();
     private final Map<String, JLabel> mensajesPorId = new HashMap<>();
     private final Set<String> mensajesEliminados = new HashSet<>();
+    private final Map<String, Integer> mensajesNoLeidos = new HashMap<>();
+    private final Map<String, List<String>> idsNoLeidosPorContacto = new HashMap<>();
 
     private String idContactoActual;
     private String nombreContactoActual = "Sin contacto";
@@ -72,6 +71,7 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     private JTextField txtMensaje;
     private JButton btnEnviar;
     private JButton btnEnviarContacto;
+    private JButton btnEnviarImagen;
     private JButton btnOffline;
     private JList<Contact> listContactos;
 
@@ -166,7 +166,7 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
 
         listContactos = new JList<>(contactModel);
         listContactos.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        listContactos.setCellRenderer(new ContactCellRenderer());
+        listContactos.setCellRenderer(new ContactCellRenderer(mensajesNoLeidos));
         listContactos.setBackground(COLOR_PANEL);
         listContactos.setBorder(new EmptyBorder(6, 8, 6, 8));
         listContactos.addListSelectionListener(e -> {
@@ -186,11 +186,11 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
                 new EmptyBorder(12, 14, 12, 14)
         ));
 
-        JLabel lblConexion = new JLabel("CONEXION P2P");
+        JLabel lblConexion = new JLabel("");
         lblConexion.setForeground(new Color(131, 141, 136));
         lblConexion.setFont(new Font("Segoe UI", Font.BOLD, 12));
 
-        JLabel lblIp = new JLabel("IP destino");
+        JLabel lblIp = new JLabel("ip destino");
         lblIp.setForeground(new Color(114, 123, 118));
         lblIp.setFont(new Font("Segoe UI", Font.PLAIN, 12));
         lblIp.setBorder(new EmptyBorder(10, 0, 4, 0));
@@ -279,6 +279,10 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         styleSecondaryButton(btnEnviarContacto);
         btnEnviarContacto.addActionListener(e -> enviarContactoAAmigo());
 
+        btnEnviarImagen = new JButton("Imagen");
+        styleSecondaryButton(btnEnviarImagen);
+        btnEnviarImagen.addActionListener(e -> enviarImagenChat());
+
         btnEnviar = new JButton("Enviar");
         stylePrimaryButton(btnEnviar);
         btnEnviar.addActionListener(e -> enviarMensajeChat());
@@ -286,6 +290,7 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         JPanel accionesMensaje = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
         accionesMensaje.setOpaque(false);
         accionesMensaje.add(btnEnviarContacto);
+        accionesMensaje.add(btnEnviarImagen);
         accionesMensaje.add(btnEnviar);
 
         composer.add(txtMensaje, BorderLayout.CENTER);
@@ -378,6 +383,7 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         if (messageController != null) {
             try {
                 messageController.cargarHistorial(MI_ID, idContactoActual);
+                limpiarNoLeidosContacto(idContactoActual, true);
             } catch (OperationException e) {
                 appendSistema(e.getMessage());
             }
@@ -425,6 +431,56 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
             return null;
         }
         return contactModel.getElementAt(index);
+    }
+
+    private boolean esContactoActivo(String idUsuario) {
+        return idUsuario != null && idUsuario.equals(idContactoActual);
+    }
+
+    private void sumarNoLeido(String idUsuario, String idMensaje) {
+        if (idUsuario == null || idUsuario.isBlank()) {
+            return;
+        }
+        int actual = mensajesNoLeidos.getOrDefault(idUsuario, 0);
+        mensajesNoLeidos.put(idUsuario, actual + 1);
+        if (idMensaje != null && !idMensaje.isBlank()) {
+            idsNoLeidosPorContacto.computeIfAbsent(idUsuario, k -> new ArrayList<>()).add(idMensaje);
+        }
+        refrescarCeldaContacto(idUsuario);
+    }
+
+    private void limpiarNoLeidosContacto(String idUsuario, boolean enviarConfirmacion) {
+        if (idUsuario == null || idUsuario.isBlank()) {
+            return;
+        }
+
+        List<String> pendientes = idsNoLeidosPorContacto.remove(idUsuario);
+        mensajesNoLeidos.remove(idUsuario);
+        refrescarCeldaContacto(idUsuario);
+
+        if (!enviarConfirmacion || messageController == null || pendientes == null || pendientes.isEmpty()) {
+            return;
+        }
+
+        for (String idMensaje : pendientes) {
+            if (idMensaje == null || idMensaje.isBlank()) {
+                continue;
+            }
+            try {
+                messageController.confirmarLectura(idUsuario, idMensaje);
+            } catch (OperationException e) {
+                appendSistema(e.getMessage());
+            }
+        }
+    }
+
+    private void refrescarCeldaContacto(String idUsuario) {
+        int index = buscarIndiceContacto(idUsuario);
+        if (index < 0) {
+            return;
+        }
+        Contact contacto = contactModel.getElementAt(index);
+        contactModel.set(index, contacto);
     }
 
     private void marcarContactoOnline(String idUsuario, boolean online) {
@@ -490,6 +546,36 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         }
         try {
             messageController.enviarMensaje(MI_ID, idContactoActual, txtMensaje.getText());
+        } catch (OperationException e) {
+            appendSistema(e.getMessage());
+        }
+    }
+
+    private void enviarImagenChat() {
+        if (messageController == null) {
+            appendSistema("Controlador de mensajes no configurado.");
+            return;
+        }
+        if (idContactoActual == null || idContactoActual.isBlank()) {
+            appendSistema("Selecciona un contacto para enviar.");
+            return;
+        }
+
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Selecciona una imagen");
+        chooser.setAcceptAllFileFilterUsed(false);
+        chooser.setFileFilter(new FileNameExtensionFilter(
+                "Imagenes", "png", "jpg", "jpeg", "gif", "bmp", "webp"
+        ));
+
+        int result = chooser.showOpenDialog(this);
+        if (result != JFileChooser.APPROVE_OPTION) {
+            return;
+        }
+
+        File archivo = chooser.getSelectedFile();
+        try {
+            messageController.enviarImagen(MI_ID, idContactoActual, archivo);
         } catch (OperationException e) {
             appendSistema(e.getMessage());
         }
@@ -573,267 +659,149 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         EventQueue.invokeLater(() -> new ChatUI().setVisible(true));
     }
 
-    @Override
-    public void onInvitacionRecibida(Invitacion inv, SocketClient sender) {
-        BlackListDao blackListDao = new BlackListDao();
-        String ipRemota = sender.getIp();
-        guardarOActualizarConControlador(inv.getIdUsuario(), inv.getNombre(), ipRemota, false);
-
-        if (blackListDao.isBlacklisted(ipRemota)) {
-            try {
-                if (connectionController == null) {
-                    throw new OperationException("Controlador de conexion no configurado.");
-                }
-                connectionController.rechazarInvitacion(sender, true);
-                SwingUtilities.invokeLater(() -> appendSistema("Solicitud rechazada (IP en lista negra)."));
-            } catch (OperationException e) {
-                SwingUtilities.invokeLater(() -> appendSistema("Error al rechazar automaticamente."));
-            }
-            return;
-        }
-        SwingUtilities.invokeLater(() -> {
-            int respuesta = JOptionPane.showConfirmDialog(
-                    this,
-                    "Invitacion de " + inv.getNombre() + ".\nDeseas aceptar la conexion?",
-                    "Solicitud 001",
-                    JOptionPane.YES_NO_OPTION
-            );
-
-            try {
-                if (respuesta == JOptionPane.YES_OPTION) {
-                    if (connectionController == null) {
-                        throw new OperationException("Controlador de conexion no configurado.");
-                    }
-                    connectionController.aceptarInvitacion(sender, MI_ID, miNombre);
-                    idContactoActual = inv.getIdUsuario();
-                    nombreContactoActual = inv.getNombre();
-                    setEstado("Conectado", new Color(187, 247, 208));
-                    setContacto(nombreContactoActual);
-                    guardarOActualizarConControlador(inv.getIdUsuario(), inv.getNombre(), sender.getIp(), true);
-                    marcarContactoOnline(inv.getIdUsuario(), true);
-                    seleccionarContactoEnLista(inv.getIdUsuario());
-                    appendSistema("Conexion aceptada. Ya pueden chatear.");
-                } else {
-                    if (connectionController == null) {
-                        throw new OperationException("Controlador de conexion no configurado.");
-                    }
-                    connectionController.rechazarInvitacion(sender, false);
-
-                    BlackListDao blackListDao2 = new BlackListDao();
-
-                    blackListDao2.addToBlacklist(sender.getIp());
-
-                    appendSistema("Conexion rechazada y agregada a lista negra.");
-                }
-            } catch (OperationException e) {
-                appendSistema(e.getMessage());
-            }
-        });
+    public String getMiId() {
+        return MI_ID;
     }
 
-    @Override
-    public void onAceptacionRecibida(AceptacionInvitacion acc, SocketClient sender) {
-        SwingUtilities.invokeLater(() -> {
-            if (connectionController != null) {
-                connectionController.usarConexion(sender);
-            }
-            idContactoActual = acc.getIdUsuario();
-            nombreContactoActual = acc.getNombre();
-            setEstado("Conectado", new Color(187, 247, 208));
-            setContacto(nombreContactoActual);
-            guardarOActualizarConControlador(acc.getIdUsuario(), acc.getNombre(), sender.getIp(), true);
-            marcarContactoOnline(acc.getIdUsuario(), true);
-            seleccionarContactoEnLista(acc.getIdUsuario());
-            appendSistema(acc.getNombre() + " acepto tu invitacion 002.");
-        });
+    public String getMiNombre() {
+        return miNombre;
     }
 
-    @Override
-    public void onRechazoRecibido(RechazoConexion rechazo, SocketClient sender) {
-        SwingUtilities.invokeLater(() -> {
-            setEstado("Rechazado", new Color(254, 202, 202));
-            appendSistema("La solicitud fue rechazada (003).");
-        });
+    public int pedirDecisionInvitacion(String nombre) {
+        return JOptionPane.showConfirmDialog(
+                this,
+                "Invitacion de " + nombre + ".\nDeseas aceptar la conexion?",
+                "Solicitud 001",
+                JOptionPane.YES_NO_OPTION
+        );
     }
 
-    @Override
-    public void onHelloRecibido(Hello hello, SocketClient sender) {
-        if (hello == null) {
-            return;
-        }
+    public int pedirDecisionHello(String nombre) {
+        return JOptionPane.showConfirmDialog(
+                this,
+                "Conexion automatica de " + nombre + ".\nDeseas aceptar?",
+                "Solicitud 004",
+                JOptionPane.YES_NO_OPTION
+        );
+    }
 
-        boolean existe;
-        try {
-            if (contactController == null) {
-                throw new OperationException("Controlador de contactos no configurado.");
-            }
-            existe = contactController.existeContactoPorCodigo(hello.getIdUsuario());
-        } catch (OperationException e) {
-            SwingUtilities.invokeLater(() -> appendSistema(e.getMessage()));
-            return;
-        }
+    public Contact guardarOActualizarContactoDesdeEvento(String idUsuario, String nombre, String ip, boolean online) {
+        return guardarOActualizarConControlador(idUsuario, nombre, ip, online);
+    }
 
-        if (!existe) {
+    public Contact obtenerContactoPorId(String idUsuario) {
+        return buscarContactoPorId(idUsuario);
+    }
+
+    public String getIdContactoActual() {
+        return idContactoActual;
+    }
+
+    public void activarContactoEnVista(String idUsuario, String nombre, String ip, boolean online) {
+        idContactoActual = idUsuario;
+        nombreContactoActual = (nombre == null || nombre.isBlank()) ? idUsuario : nombre;
+        setContacto(nombreContactoActual);
+        if (ip != null && !ip.isBlank()) {
+            txtIp.setText(ip);
+        }
+        marcarContactoOnline(idUsuario, online);
+        seleccionarContactoEnLista(idUsuario);
+        setEstado(online ? "Conectado" : "Sin conexion", null);
+    }
+
+    public void mostrarEstadoRechazado() {
+        setEstado("Rechazado", null);
+    }
+
+    public void limpiarContactoActivo() {
+        idContactoActual = null;
+        nombreContactoActual = "Sin contacto";
+        setContacto(nombreContactoActual);
+    }
+
+    public void manejarMensajeEntrante(MensajeChat mensaje, String ipRemota) {
+        Contact contactoActual = buscarContactoPorId(mensaje.getIdUser());
+        String nombre = contactoActual != null ? contactoActual.getName() : mensaje.getIdUser();
+        guardarOActualizarConControlador(mensaje.getIdUser(), nombre, ipRemota, true);
+        marcarContactoOnline(mensaje.getIdUser(), true);
+        if (esContactoActivo(mensaje.getIdUser()) && messageController != null) {
             try {
-                if (connectionController == null) {
-                    throw new OperationException("Controlador de conexion no configurado.");
-                }
-                connectionController.rechazarHello(sender, true);
-                SwingUtilities.invokeLater(() -> {
-                    setEstado("Sin conexion", new Color(255, 230, 153));
-                    appendSistema("Conexion automatica rechazada (006).");
-                });
-            } catch (OperationException e) {
-                SwingUtilities.invokeLater(() -> appendSistema(e.getMessage()));
-            }
-            return;
-        }
-
-        SwingUtilities.invokeLater(() -> {
-            try {
-                if (connectionController == null) {
-                    throw new OperationException("Controlador de conexion no configurado.");
-                }
-                connectionController.aceptarHello(sender, MI_ID);
-                idContactoActual = hello.getIdUsuario();
-                Contact contacto = buscarContactoPorId(idContactoActual);
-                nombreContactoActual = contacto != null ? contacto.getName() : idContactoActual;
-                guardarOActualizarConControlador(idContactoActual, nombreContactoActual, sender.getIp(), true);
-                marcarContactoOnline(idContactoActual, true);
-                seleccionarContactoEnLista(idContactoActual);
-                setEstado("Conectado", new Color(187, 247, 208));
-                setContacto(nombreContactoActual);
-                appendSistema("Conexion automatica aceptada (005).");
+                messageController.recibirMensaje(mensaje);
             } catch (OperationException e) {
                 appendSistema(e.getMessage());
             }
-        });
+            return;
+        }
+
+        sumarNoLeido(mensaje.getIdUser(), mensaje.getIdMensaje());
     }
 
-    @Override
-    public void onAceptarHelloRecibido(AceptarHello aceptarHello, SocketClient sender) {
-        SwingUtilities.invokeLater(() -> {
-            if (connectionController != null) {
-                connectionController.usarConexion(sender);
+    public void manejarImagenEntrante(ImagenChat imagen, String ipRemota) {
+        Contact contactoActual = buscarContactoPorId(imagen.getIdUser());
+        String nombre = contactoActual != null ? contactoActual.getName() : imagen.getIdUser();
+        guardarOActualizarConControlador(imagen.getIdUser(), nombre, ipRemota, true);
+        marcarContactoOnline(imagen.getIdUser(), true);
+        if (esContactoActivo(imagen.getIdUser()) && messageController != null) {
+            try {
+                messageController.recibirImagen(imagen);
+            } catch (OperationException e) {
+                appendSistema(e.getMessage());
             }
-            idContactoActual = aceptarHello.getIdUsuario();
-            Contact contacto = buscarContactoPorId(idContactoActual);
-            nombreContactoActual = contacto != null ? contacto.getName() : idContactoActual;
-            guardarOActualizarConControlador(idContactoActual, nombreContactoActual, sender.getIp(), true);
-            marcarContactoOnline(idContactoActual, true);
-            seleccionarContactoEnLista(idContactoActual);
-            setEstado("Conectado", new Color(187, 247, 208));
-            setContacto(nombreContactoActual);
-            appendSistema("Conexion automatica establecida (005).");
-        });
+            return;
+        }
+
+        sumarNoLeido(imagen.getIdUser(), imagen.getIdMensaje());
     }
 
-    @Override
-    public void onRechazarHelloRecibido(RechazarHello rechazoHello, SocketClient sender) {
-        SwingUtilities.invokeLater(() -> {
-            if (connectionController != null) {
-                connectionController.cerrarConexionActual();
-            }
-            setEstado("Rechazado", new Color(254, 202, 202));
-            appendSistema("La conexion automatica fue rechazada (006).");
-        });
+    public void manejarContactoCompartidoRecibido(EnviarContacto contacto, String ipFallback) {
+        if (contacto == null) {
+            return;
+        }
+        String ip = contacto.getIp();
+        if (ip == null || ip.isBlank()) {
+            ip = ipFallback;
+        }
+        Contact guardado = guardarOActualizarConControlador(
+                contacto.getIdUser(),
+                contacto.getNombre(),
+                ip,
+                false
+        );
+        if (guardado != null) {
+            appendSistema("Contacto recibido: " + guardado.getName());
+        }
     }
 
-    @Override
-    public void onMensajeRecibido(MensajeChat mensaje, SocketClient sender) {
-        SwingUtilities.invokeLater(() -> {
-            Contact contactoActual = buscarContactoPorId(mensaje.getIdUser());
-            String nombre = contactoActual != null ? contactoActual.getName() : mensaje.getIdUser();
-            guardarOActualizarConControlador(mensaje.getIdUser(), nombre, sender.getIp(), true);
-            if (idContactoActual == null) {
-                idContactoActual = mensaje.getIdUser();
-                Contact contacto = buscarContactoPorId(idContactoActual);
-                if (contacto != null) {
-                    nombreContactoActual = contacto.getName();
-                }
-                setContacto(nombreContactoActual);
+    public void manejarConfirmacionLectura(ConfirmacionLectura confirmacion) {
+        if (messageController != null) {
+            try {
+                messageController.confirmarLecturaRecibida(confirmacion);
+            } catch (OperationException e) {
+                appendSistema(e.getMessage());
             }
-            marcarContactoOnline(mensaje.getIdUser(), true);
-            seleccionarContactoEnLista(mensaje.getIdUser());
-            if (messageController != null) {
-                try {
-                    messageController.recibirMensaje(mensaje);
-                } catch (OperationException e) {
-                    appendSistema(e.getMessage());
-                }
-            } else {
-                appendContacto(mensaje.getMensaje());
-            }
-        });
+        }
     }
 
-    @Override
-    public void onEnviarContactoRecibido(EnviarContacto contacto, SocketClient sender) {
-        SwingUtilities.invokeLater(() -> {
-            if (contacto == null) {
-                return;
-            }
-
-            String ip = contacto.getIp();
-            if (ip == null || ip.isBlank()) {
-                ip = sender != null ? sender.getIp() : null;
-            }
-
-            Contact guardado = guardarOActualizarConControlador(
-                    contacto.getIdUser(),
-                    contacto.getNombre(),
-                    ip,
-                    false
-            );
-
-            if (guardado != null) {
-                appendSistema("Contacto recibido: " + guardado.getName());
-            }
-        });
-    }
-
-    @Override
-    public void onEliminarMensajeRecibido(EliminarMensaje eliminarMensaje, SocketClient sender) {
-        SwingUtilities.invokeLater(() -> {
-            if (messageController == null) {
-                return;
-            }
+    public void manejarEliminacionMensaje(EliminarMensaje eliminarMensaje) {
+        if (messageController != null) {
             try {
                 messageController.recibirEliminacion(MI_ID, eliminarMensaje);
             } catch (OperationException e) {
                 appendSistema(e.getMessage());
             }
-        });
+        }
     }
 
-    @Override
-    public void onConfirmacionLecturaRecibida(ConfirmacionLectura confirmacion, SocketClient sender) {
-        SwingUtilities.invokeLater(() -> {
-            if (messageController != null) {
-                try {
-                    messageController.confirmarLecturaRecibida(confirmacion);
-                } catch (OperationException e) {
-                    appendSistema(e.getMessage());
-                }
+    public void manejarContactoOffline(String idUsuario) {
+        marcarContactoOnline(idUsuario, false);
+        if (idUsuario != null && idUsuario.equals(idContactoActual)) {
+            setEstado("Sin conexion", null);
+            appendSistema("El contacto se ha desconectado (0018).");
+            if (connectionController != null) {
+                connectionController.cerrarConexionActual();
             }
-        });
-    }
-
-    @Override
-    public void onClienteOffline(String idUsuario, SocketClient sender) {
-        SwingUtilities.invokeLater(() -> {
-            marcarContactoOnline(idUsuario, false);
-            if (idUsuario != null && idUsuario.equals(idContactoActual)) {
-                setEstado("Sin conexion", new Color(255, 230, 153));
-                appendSistema("El contacto se ha desconectado (0018).");
-                if (connectionController != null) {
-                    connectionController.cerrarConexionActual();
-                }
-                idContactoActual = null;
-                nombreContactoActual = "Sin contacto";
-                setContacto(nombreContactoActual);
-            }
-        });
+            limpiarContactoActivo();
+        }
     }
 
     private void appendSistema(String texto) {
@@ -848,12 +816,20 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         agregarBurbuja(null, texto, true, false);
     }
 
+    private void appendYoImagen(String idMensaje, String imagenBase64) {
+        agregarBurbujaImagen(idMensaje, imagenBase64, true);
+    }
+
     private void appendContacto(String texto) {
         agregarBurbuja(null, texto, false, false);
     }
 
     private void appendContacto(String idMensaje, String texto) {
         agregarBurbuja(idMensaje, texto, false, false);
+    }
+
+    private void appendContactoImagen(String idMensaje, String imagenBase64) {
+        agregarBurbujaImagen(idMensaje, imagenBase64, false);
     }
 
     private void appendYoEliminado(String idMensaje) {
@@ -888,6 +864,8 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     public void onload(List<Contact> contactos) {
         SwingUtilities.invokeLater(() -> {
             contactModel.clear();
+            mensajesNoLeidos.clear();
+            idsNoLeidosPorContacto.clear();
             for (Contact c : contactos) {
                 contactModel.addElement(c);
             }
@@ -911,6 +889,11 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     }
 
     @Override
+    public void mostrarImagenPropia(String idMensaje, String imagenBase64) {
+        SwingUtilities.invokeLater(() -> appendYoImagen(idMensaje, imagenBase64));
+    }
+
+    @Override
     public void mostrarMensajePropioEliminado(String idMensaje) {
         SwingUtilities.invokeLater(() -> appendYoEliminado(idMensaje));
     }
@@ -923,6 +906,11 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     @Override
     public void mostrarMensajeContacto(String idMensaje, String mensaje) {
         SwingUtilities.invokeLater(() -> appendContacto(idMensaje, mensaje));
+    }
+
+    @Override
+    public void mostrarImagenContacto(String idMensaje, String imagenBase64) {
+        SwingUtilities.invokeLater(() -> appendContactoImagen(idMensaje, imagenBase64));
     }
 
     @Override
@@ -946,8 +934,10 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
                 return;
             }
             mensajesEliminados.add(idMensaje);
+            etiqueta.setIcon(null);
             etiqueta.setText("<html><div style='width: 240px;'>" + TEXTO_MENSAJE_ELIMINADO + "</div></html>");
             etiqueta.setForeground(new Color(150, 150, 150));
+            etiqueta.setBackground(new Color(246, 247, 246));
             etiqueta.revalidate();
             etiqueta.repaint();
         });
@@ -1057,6 +1047,111 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         desplazarChatAlFinal();
     }
 
+    private void agregarBurbujaImagen(String idMensaje, String imagenBase64, boolean propia) {
+        JPanel fila = new JPanel(new FlowLayout(propia ? FlowLayout.RIGHT : FlowLayout.LEFT, 0, 8));
+        fila.setOpaque(false);
+
+        JPanel contenido = new JPanel();
+        contenido.setLayout(new BoxLayout(contenido, BoxLayout.Y_AXIS));
+        contenido.setOpaque(false);
+
+        JLabel burbuja = new JLabel();
+        burbuja.setOpaque(true);
+        burbuja.setBackground(propia ? COLOR_OWN_BUBBLE : COLOR_OTHER_BUBBLE);
+        burbuja.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(new Color(213, 220, 217)),
+                new EmptyBorder(8, 8, 8, 8)
+        ));
+        burbuja.setAlignmentX(propia ? Component.RIGHT_ALIGNMENT : Component.LEFT_ALIGNMENT);
+
+        ImageIcon icono = crearIconoEscalado(imagenBase64);
+        if (icono != null) {
+            burbuja.setIcon(icono);
+        } else {
+            burbuja.setText("Imagen no disponible");
+            burbuja.setFont(new Font("Segoe UI", Font.PLAIN, 14));
+            burbuja.setForeground(propia ? Color.WHITE : COLOR_TEXT_PRIMARY);
+            burbuja.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(new Color(213, 220, 217)),
+                    new EmptyBorder(10, 14, 10, 14)
+            ));
+        }
+
+        contenido.add(burbuja);
+        if (idMensaje != null && !idMensaje.isBlank()) {
+            mensajesPorId.put(idMensaje, burbuja);
+        }
+
+        if (propia && idMensaje != null && !idMensaje.isBlank()) {
+            JLabel indicador = new JLabel(" ");
+            indicador.setFont(new Font("Segoe UI", Font.PLAIN, 11));
+            indicador.setForeground(new Color(170, 222, 195));
+            indicador.setBorder(new EmptyBorder(2, 4, 0, 4));
+            indicador.setAlignmentX(Component.RIGHT_ALIGNMENT);
+            contenido.add(indicador);
+            indicadoresLectura.put(idMensaje, indicador);
+
+            JPopupMenu popup = new JPopupMenu();
+            JMenuItem itemEliminar = new JMenuItem("Eliminar mensaje");
+            itemEliminar.addActionListener(e -> eliminarMensajePropio(idMensaje));
+            popup.add(itemEliminar);
+            burbuja.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    if (e.isPopupTrigger()) {
+                        popup.show(e.getComponent(), e.getX(), e.getY());
+                    }
+                }
+
+                @Override
+                public void mouseReleased(MouseEvent e) {
+                    if (e.isPopupTrigger()) {
+                        popup.show(e.getComponent(), e.getX(), e.getY());
+                    }
+                }
+            });
+        }
+
+        fila.add(contenido);
+        fila.setAlignmentX(Component.LEFT_ALIGNMENT);
+        fila.setMaximumSize(new Dimension(Integer.MAX_VALUE, fila.getPreferredSize().height));
+
+        messagesContainer.add(fila);
+        messagesContainer.revalidate();
+        messagesContainer.repaint();
+        desplazarChatAlFinal();
+    }
+
+    private ImageIcon crearIconoEscalado(String imagenBase64) {
+        if (imagenBase64 == null || imagenBase64.isBlank()) {
+            return null;
+        }
+        try {
+            byte[] bytes = Base64.getDecoder().decode(imagenBase64);
+            ImageIcon original = new ImageIcon(bytes);
+            int width = original.getIconWidth();
+            int height = original.getIconHeight();
+            if (width <= 0 || height <= 0) {
+                return null;
+            }
+
+            double scale = Math.min(
+                    1.0,
+                    Math.min(
+                            (double) MAX_IMAGE_BUBBLE_SIZE / width,
+                            (double) MAX_IMAGE_BUBBLE_SIZE / height
+                    )
+            );
+            int newWidth = Math.max(1, (int) Math.round(width * scale));
+            int newHeight = Math.max(1, (int) Math.round(height * scale));
+
+            Image scaled = original.getImage().getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH);
+            return new ImageIcon(scaled);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     private void eliminarMensajePropio(String idMensaje) {
         if (idMensaje == null || idMensaje.isBlank()) {
             return;
@@ -1137,11 +1232,14 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
     }
 
     private static class ContactCellRenderer extends JPanel implements ListCellRenderer<Contact> {
+        private final Map<String, Integer> mensajesNoLeidos;
         private final JLabel lblChip = new JLabel();
         private final JLabel lblNombre = new JLabel();
         private final JLabel lblSub = new JLabel();
+        private final JLabel lblBadge = new JLabel();
 
-        ContactCellRenderer() {
+        ContactCellRenderer(Map<String, Integer> mensajesNoLeidos) {
+            this.mensajesNoLeidos = mensajesNoLeidos;
             setLayout(new BorderLayout(8, 2));
             setBorder(new EmptyBorder(8, 10, 8, 10));
             setOpaque(true);
@@ -1162,8 +1260,16 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
             textPanel.add(lblNombre);
             textPanel.add(lblSub);
 
+            lblBadge.setOpaque(true);
+            lblBadge.setHorizontalAlignment(SwingConstants.CENTER);
+            lblBadge.setFont(new Font("Segoe UI", Font.BOLD, 11));
+            lblBadge.setForeground(Color.WHITE);
+            lblBadge.setBackground(new Color(43, 112, 81));
+            lblBadge.setBorder(new EmptyBorder(3, 7, 3, 7));
+
             add(lblChip, BorderLayout.WEST);
             add(textPanel, BorderLayout.CENTER);
+            add(lblBadge, BorderLayout.EAST);
         }
 
         @Override
@@ -1190,6 +1296,15 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
             String sub = (value.getIp() == null || value.getIp().isBlank()) ? "Sin IP registrada" : value.getIp();
             lblSub.setText(sub);
 
+            int noLeidos = mensajesNoLeidos.getOrDefault(value.getCode(), 0);
+            if (noLeidos > 0) {
+                lblBadge.setVisible(true);
+                lblBadge.setText(noLeidos > 99 ? "99+" : String.valueOf(noLeidos));
+            } else {
+                lblBadge.setVisible(false);
+                lblBadge.setText("");
+            }
+
             if (isSelected) {
                 setBackground(new Color(216, 230, 222));
             } else {
@@ -1199,4 +1314,3 @@ public class ChatUI extends JFrame implements ChatEventListener, IChatView {
         }
     }
 }
-

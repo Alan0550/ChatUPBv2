@@ -7,6 +7,7 @@ import edu.upb.chatupb_v2.model.network.ChatServer;
 import edu.upb.chatupb_v2.controller.ConnectionController;
 import edu.upb.chatupb_v2.controller.ContactController;
 import edu.upb.chatupb_v2.controller.MessageController;
+import edu.upb.chatupb_v2.controller.NetworkEventController;
 import edu.upb.chatupb_v2.view.ChatUI;
 
 /**
@@ -20,6 +21,12 @@ public class ChatUPB_V2 {
         ConnectionController connectionController = new ConnectionController(chatUI);
         ContactController contactController = new ContactController(chatUI);
         MessageController messageController = new MessageController(chatUI);
+        NetworkEventController networkEventController = new NetworkEventController(
+                chatUI,
+                connectionController,
+                contactController,
+                messageController
+        );
         chatUI.setConnectionController(connectionController);
         chatUI.setContactController(contactController);
         chatUI.setMessageController(messageController);
@@ -27,7 +34,7 @@ public class ChatUPB_V2 {
 
         try {
             ChatServer chatServer = new ChatServer();
-            chatServer.addListener(chatUI);
+            chatServer.addListener(networkEventController);
             chatServer.start();
         }catch (Exception e){
             e.printStackTrace();

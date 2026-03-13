@@ -1,5 +1,9 @@
 package edu.upb.chatupb_v2.model.entities;
 
+import edu.upb.chatupb_v2.model.network.ClientMediator;
+import edu.upb.chatupb_v2.model.network.SocketClient;
+import edu.upb.chatupb_v2.model.repository.DaoHelper;
+
 import java.util.regex.Pattern;
 
 public class Offline extends Message {
@@ -26,6 +30,16 @@ public class Offline extends Message {
     @Override
     public String generarTrama() {
         return getCodigo() + "|" + idUsuario + System.lineSeparator();
+    }
+
+    @Override
+    public void execute(ClientMediator mediator, SocketClient sender, DaoHelper<?> daoHelper) {
+        mediator.onClienteOffline(idUsuario, sender);
+    }
+
+    @Override
+    public String extractClientId() {
+        return idUsuario;
     }
 
     public String getIdUsuario() {

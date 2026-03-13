@@ -1,5 +1,9 @@
 package edu.upb.chatupb_v2.model.entities;
 
+import edu.upb.chatupb_v2.model.network.ClientMediator;
+import edu.upb.chatupb_v2.model.network.SocketClient;
+import edu.upb.chatupb_v2.model.repository.DaoHelper;
+
 public class RechazoConexion extends Message {
 
     public RechazoConexion() {
@@ -16,6 +20,11 @@ public class RechazoConexion extends Message {
     @Override
     public String generarTrama() {
         return getCodigo() + System.lineSeparator();
+    }
+
+    @Override
+    public void execute(ClientMediator mediator, SocketClient sender, DaoHelper<?> daoHelper) {
+        mediator.onRechazoRecibido(this, sender);
     }
 }
 

@@ -1,5 +1,9 @@
 package edu.upb.chatupb_v2.model.entities;
 
+import edu.upb.chatupb_v2.model.network.ClientMediator;
+import edu.upb.chatupb_v2.model.network.SocketClient;
+import edu.upb.chatupb_v2.model.repository.DaoHelper;
+
 import java.util.regex.Pattern;
 
 public class AceptacionInvitacion extends Message {
@@ -28,6 +32,16 @@ public class AceptacionInvitacion extends Message {
     @Override
     public String generarTrama() {
         return getCodigo() + "|" + idUsuario + "|" + nombre + System.lineSeparator();
+    }
+
+    @Override
+    public void execute(ClientMediator mediator, SocketClient sender, DaoHelper<?> daoHelper) {
+        mediator.onAceptacionRecibida(this, sender);
+    }
+
+    @Override
+    public String extractClientId() {
+        return idUsuario;
     }
 
     public String getIdUsuario() {
